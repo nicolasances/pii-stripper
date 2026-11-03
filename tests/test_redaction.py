@@ -1,4 +1,5 @@
 import pymupdf
+import pytest
 from faker import Faker
 
 from pii_strip.redactor import redact_pdf
@@ -103,3 +104,20 @@ def test_draws_a_black_box_where_the_email_was(tmp_path):
     redacted.close()
     centre = pixmap.pixel(pixmap.width // 2, pixmap.height // 2)
     assert centre[:3] == (0, 0, 0)
+
+
+@pytest.mark.xfail(strict=True, reason="Known limitation (F01 OQ-02): an email wrapped across two lines is not detected, so it is not redacted")
+def test_redacts_an_email_that_is_split_across_two_lines(tmp_path):
+    source = tmp_path / "in.pdf"
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_text((72, 72), "Write to anna.jensen@", fontsize=11)
+    page.insert_text((72, 90), "example.dk today", fontsize=11)
+    doc.save(source)
+    doc.close()
+    output = tmp_path / "out.pdf"
+
+    redact_pdf(source, output)
+
+    text = extract_text(output)
+    assert "anna.jensen@" not in text
