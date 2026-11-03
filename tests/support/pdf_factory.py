@@ -31,3 +31,14 @@ def page_count(path: Path) -> int:
     doc.close()
 
     return count
+
+
+def make_encrypted_pdf(path: Path, text: str) -> Path:
+    """Create a password-protected PDF (synthetic content only)."""
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_text((72, 72), text, fontsize=11)
+    doc.save(path, encryption=pymupdf.PDF_ENCRYPT_AES_256, owner_pw="owner-secret", user_pw="user-secret")
+    doc.close()
+
+    return path
