@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pii-strip"
+version = "0.1.0"
+description = "Remove personally identifiable information from PDFs (true redaction). Assistive, not a guarantee."
+requires-python = ">=3.11"
+dependencies = ["pymupdf", "presidio-analyzer"]
+
+[project.optional-dependencies]
+dev = ["pytest", "faker"]
+
+[project.scripts]
+pii-strip = "pii_strip.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = ["ignore:builtin type .* has no __module__ attribute:DeprecationWarning"]
