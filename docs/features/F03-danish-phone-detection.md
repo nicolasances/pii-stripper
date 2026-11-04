@@ -1,5 +1,7 @@
 # F03 — Danish phone number detection
 
+![Status](https://img.shields.io/badge/status-implemented-brightgreen?style=flat-square)
+
 ## 1. Purpose & Scope
 
 Detect and redact Danish phone numbers in the formats commonly written in Danish documents. Generic phone recognizers often miss Danish groupings or confuse them with other numbers.
@@ -55,3 +57,12 @@ No new command or flag. The existing `pii-strip` command (F01) now also redacts 
 |---|----------|-------|
 | OQ-01 | Should Presidio's generic `PHONE_NUMBER` recognizer also be enabled for foreign numbers? | Possibly more recall on mixed documents, at the cost of more false positives |
 | OQ-02 | Should Danish premium and short numbers (e.g. 4-digit numbers, 70xx xx xx) be excluded? | Business numbers aren't personal data, but they're hard to tell apart from personal ones |
+
+## 8. Implementation Notes
+
+- Scores: a number with a `+45`, `0045` or `(+45)` prefix, or with a context word within 30 characters before it, scores 0.85. A bare number scores 0.3. Context words are matched case-insensitively at a word start, so `Hotel 12345678` gets no boost but `Telefonnr` does.
+- The prefix is part of the match, so it is redacted together with the number.
+- Matches must not touch other digits, and must not start or end inside a longer run of two-digit groups (`12 34 56 78 90` is not a phone number).
+- A minimal default threshold of 0.5 now lives in `find_pii_strings` (`DEFAULT_THRESHOLD`). Without it, bare numbers would still be redacted. It also means a bare 10-digit CPR number without a context word is no longer redacted (F02, OQ-03). F05 will make the threshold configurable.
+- Overlap with CPR is resolved in `detector.without_phone_overlapping_cpr`: a `DK_PHONE` result that overlaps a `DK_CPR` result is dropped. With the current patterns the overlap is rare, so this is mostly a safeguard.
+
