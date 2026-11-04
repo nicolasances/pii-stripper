@@ -1,5 +1,7 @@
 # F02 — Danish CPR number detection
 
+![Status](https://img.shields.io/badge/status-implemented-brightgreen?style=flat-square)
+
 ## 1. Purpose & Scope
 
 Detect and redact Danish CPR numbers (personal identification numbers). These are among the most sensitive PII in Danish documents, and generic PII tools don't recognize them.

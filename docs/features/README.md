@@ -5,7 +5,7 @@ Index of the planned features for `pii-strip`. The overall idea is in [`../idea.
 | Feature | Status |
 |---|---|
 | [F01 — Walking skeleton: email redaction end to end](F01-walking-skeleton-email-redaction.md) | ![Status](https://img.shields.io/badge/status-implemented-brightgreen?style=flat-square) |
-| [F02 — Danish CPR number detection](F02-danish-cpr-detection.md) | planned |
+| [F02 — Danish CPR number detection](F02-danish-cpr-detection.md) | ![Status](https://img.shields.io/badge/status-implemented-brightgreen?style=flat-square) |
 | [F03 — Danish phone number detection](F03-danish-phone-detection.md) | planned |
 | [F04 — Names and places (Danish + English NER)](F04-names-and-places-ner.md) | planned |
 | [F05 — Deny list, allow list and threshold](F05-deny-allow-threshold.md) | planned |
