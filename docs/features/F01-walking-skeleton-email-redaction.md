@@ -1,5 +1,7 @@
 # F01 — Walking skeleton: email redaction end to end
 
+![Status](https://img.shields.io/badge/status-implemented-brightgreen?style=flat-square)
+
 ## 1. Purpose & Scope
 
 This feature delivers the first working version of `pii-strip`. It reads a PDF, finds email addresses, **truly redacts** them (the text is removed from the file and a black box is drawn in its place) and writes a new PDF.
@@ -39,7 +41,8 @@ A developer has a PDF to attach to a bug report or use as a test fixture, and ne
 **Behavior:**
 - `-o/--output` is required. If the output path equals the input path, the command fails, so the tool never redacts in place.
 - If the output file already exists, the command fails unless `--force` is given.
-- Exit codes introduced here: `0` success, `1` error (input not found, not a PDF, encrypted or password-protected, output not writable). Error messages go to stderr.
+- Exit codes introduced here: `0` success, `1` error (input not found, not a PDF or corrupt, encrypted or password-protected, output not writable, output equals input, output exists without `--force`, **and command-line usage errors**). Error messages go to stderr.
+- Usage errors (e.g. a missing `-o`) exit with `1`, not argparse's default `2`, because exit code `2` is reserved for "PII left after redaction" (F07).
 
 ## 4. Business Logic
 
@@ -57,12 +60,13 @@ A developer has a PDF to attach to a bug report or use as a test fixture, and ne
 
 | # | Decision | Rationale |
 |---|----------|-----------|
-| TD-01 | Python 3.11+, packaged with `uv` and `pyproject.toml`, exposed as the `pii-strip` console script | Python has the mature redaction and PII detection libraries; TypeScript lacks a mature true-redaction option (see `docs/idea.md` §8) |
+| TD-01 | Python 3.11+, packaged with `pyproject.toml` (setuptools, `src/` layout), exposed as the `pii-strip` console script. Installed with a plain venv + pip (`pip install -e '.[dev]'`); `uv` isn't required | Python has the mature redaction and PII detection libraries; TypeScript lacks a mature true-redaction option (see `docs/idea.md` §8) |
 | TD-02 | PyMuPDF for reading the PDF, finding text positions and applying redactions | One of the few open libraries that removes the underlying text as well as covering it. **AGPL**: fine internally; check with DR Jura before any external distribution |
 | TD-03 | Microsoft Presidio (analyzer) as the detection framework | Gives a recognizer model, scoring and built-in recognizers that later features extend |
 | TD-04 | Map findings to page areas by searching for the matched string on the page | Simplest approach. It over-redacts repeated strings, which is the safe failure mode for a PII tool (OQ-03 in `docs/idea.md`) |
-| TD-05 | Use a lightweight CLI framework (e.g. Typer or argparse) | Standard, well-documented options; pick one at implementation time |
-| TD-06 | Generate test fixtures with PyMuPDF, with fake data from Faker (`da_DK` and `en` locales) | Keeps real PII out of the repo and makes fixtures reproducible |
+| TD-05 | `argparse` (standard library) for the CLI | No extra dependency, enough for the handful of flags planned in F01–F09. `ArgumentParser.error` is overridden so usage errors exit with `1` |
+| TD-06 | Generate test fixtures with PyMuPDF, with fake data from Faker (`da_DK` and `en` locales) | Keeps real PII out of the repo and makes fixtures reproducible. The helper lives in `tests/support/pdf_factory.py` |
+| TD-07 | Use Presidio's `EmailRecognizer` directly, without an `AnalyzerEngine` or any spaCy model | Verified to work standalone, so F01 needs no model download. F04 introduces the `AnalyzerEngine` with an explicit Danish + English NLP configuration |
 
 ## 6. Success Criteria
 
@@ -80,6 +84,6 @@ A developer has a PDF to attach to a bug report or use as a test fixture, and ne
 
 | # | Question | Notes |
 |---|----------|-------|
-| OQ-01 | Typer or argparse? | Typer is more ergonomic but adds a dependency; argparse is part of the standard library |
-| OQ-02 | Should email addresses split across two lines be handled? | Likely missed when searching for the exact string. Accept as a known limitation in v1, with a test documenting it? |
-| OQ-03 | Is `--force` needed, or should an existing output always be overwritten? | `--force` is safer |
+| OQ-01 | Typer or argparse? | **Resolved:** argparse (TD-05) |
+| OQ-02 | Should email addresses split across two lines be handled? | **Resolved for v1: accepted as a known limitation.** Verified: such an email is not detected at all, so it is **not redacted and stays readable in the output**. Documented by a strict `xfail` test (`test_redacts_an_email_that_is_split_across_two_lines`). The F07 verification pass reuses the same text-based detection, so it would not catch this case either; a fix needs line-aware text handling and should be planned as follow-up work |
+| OQ-03 | Is `--force` needed, or should an existing output always be overwritten? | **Resolved:** `--force` is required to overwrite an existing output |
