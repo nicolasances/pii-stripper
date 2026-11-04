@@ -133,3 +133,15 @@ def test_removes_a_delimited_cpr_number_from_extracted_text(tmp_path, cpr):
     text = extract_text(output)
     assert cpr not in text
     assert "for borgeren." in text
+
+
+def test_redacts_cpr_numbers_in_all_three_formats_in_one_document(tmp_path):
+    numbers = ["010190-1234", "150385 4321", "2711951234"]
+    source = make_pdf(tmp_path / "in.pdf", [f"Dash {numbers[0]}", f"Space {numbers[1]}", f"Contiguous {numbers[2]}"])
+    output = tmp_path / "out.pdf"
+
+    count = redact_pdf(source, output)
+
+    text = extract_text(output)
+    assert all(number not in text for number in numbers)
+    assert count == 3
