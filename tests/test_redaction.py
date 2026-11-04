@@ -121,3 +121,15 @@ def test_redacts_an_email_that_is_split_across_two_lines(tmp_path):
 
     text = extract_text(output)
     assert "anna.jensen@" not in text
+
+
+@pytest.mark.parametrize("cpr", ["010190-1234", "150385 4321"])
+def test_removes_a_delimited_cpr_number_from_extracted_text(tmp_path, cpr):
+    source = make_pdf(tmp_path / "in.pdf", [f"CPR-nr: {cpr} for borgeren."])
+    output = tmp_path / "out.pdf"
+
+    redact_pdf(source, output)
+
+    text = extract_text(output)
+    assert cpr not in text
+    assert "for borgeren." in text
