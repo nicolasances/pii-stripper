@@ -60,7 +60,7 @@ def _score_of(text: str) -> float:
 
 
 def test_detects_an_undelimited_cpr_number():
-    assert find_pii_strings("Nummer 0101901234 oplyst.") == {"0101901234"}
+    assert find_pii_strings("CPR 0101901234 oplyst.") == {"0101901234"}
 
 
 def test_does_not_detect_a_ten_digit_number_without_a_valid_date():

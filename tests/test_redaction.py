@@ -137,7 +137,7 @@ def test_removes_a_delimited_cpr_number_from_extracted_text(tmp_path, cpr):
 
 def test_redacts_cpr_numbers_in_all_three_formats_in_one_document(tmp_path):
     numbers = ["010190-1234", "150385 4321", "2711951234"]
-    source = make_pdf(tmp_path / "in.pdf", [f"Dash {numbers[0]}", f"Space {numbers[1]}", f"Contiguous {numbers[2]}"])
+    source = make_pdf(tmp_path / "in.pdf", [f"Dash {numbers[0]}", f"Space {numbers[1]}", f"CPR {numbers[2]}"])
     output = tmp_path / "out.pdf"
 
     count = redact_pdf(source, output)
@@ -145,3 +145,27 @@ def test_redacts_cpr_numbers_in_all_three_formats_in_one_document(tmp_path):
     text = extract_text(output)
     assert all(number not in text for number in numbers)
     assert count == 3
+
+
+def test_redacts_danish_phone_numbers_in_every_format_with_and_without_a_prefix(tmp_path):
+    numbers = ["12345678", "12 34 56 78", "1234 5678", "12-34-56-78", "+45 12345678", "0045 12 34 56 78", "(+45) 1234 5678", "+4512-34-56-78"]
+    source = make_pdf(tmp_path / "in.pdf", [f"Tlf. {number}" for number in numbers])
+    output = tmp_path / "out.pdf"
+
+    count = redact_pdf(source, output)
+
+    text = extract_text(output)
+    assert all(number not in text for number in numbers)
+    assert count == len(numbers)
+
+
+def test_keeps_a_date_and_an_amount_written_with_eight_digits(tmp_path):
+    source = make_pdf(tmp_path / "in.pdf", ["Dato 01012024 og beløb 12.345.678 kr."])
+    output = tmp_path / "out.pdf"
+
+    count = redact_pdf(source, output)
+
+    text = extract_text(output)
+    assert "01012024" in text
+    assert "12.345.678" in text
+    assert count == 0
