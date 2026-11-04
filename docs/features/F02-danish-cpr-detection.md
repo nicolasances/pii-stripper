@@ -1,5 +1,7 @@
 # F02 — Danish CPR number detection
 
+![Status](https://img.shields.io/badge/status-implemented-brightgreen?style=flat-square)
+
 ## 1. Purpose & Scope
 
 Detect and redact Danish CPR numbers (personal identification numbers). These are among the most sensitive PII in Danish documents, and generic PII tools don't recognize them.
@@ -55,6 +57,6 @@ No new command or flag. The existing `pii-strip <input.pdf> -o <output.pdf>` com
 
 | # | Question | Notes |
 |---|----------|-------|
-| OQ-01 | Should the 7th digit be used to resolve the century (the official rules) for the date check? | More accurate leap-year handling, but more complexity for little gain |
+| OQ-01 | Should the 7th digit be used to resolve the century (the official rules) for the date check? | **Resolved: no.** 29 February is accepted when the year is a leap year in either 1900 or 2000, so `290200` is valid and `290201` is not |
 | OQ-02 | Should partial or masked CPR numbers (`010190-XXXX`) be redacted too? | The birth date alone is still personal data |
-| OQ-03 | What score should undelimited matches get without context words? | Tune against the recall check in F04 |
+| OQ-03 | What score should undelimited matches get without context words? | **Resolved for now: 0.3**, against 0.85 for dash/space matches. A context word within 30 characters before the number raises it to 0.85. Context words are matched by the recognizer itself (no NLP model), case-insensitively. Re-tune against the recall check in F04 and the threshold in F05 |
