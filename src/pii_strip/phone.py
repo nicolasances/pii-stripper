@@ -11,7 +11,7 @@ CONTEXT_WORDS = ["tlf", "telefon", "mobil", "phone", "tel", "mob"]
 _PREFIX = r"(?:(?:\+45|0045)[ ]?|\(\+45\)[ ]?)"
 _NUMBER = r"(?:\d{8}|\d{2}([ -])\d{2}\1\d{2}\1\d{2}|\d{4} \d{4})"
 # The look-arounds stop a match inside a longer digit string, including a longer run of two-digit groups
-_PHONE = rf"(?<![\d+])(?:{_PREFIX})?{_NUMBER}(?!\d)(?![ -]\d{{2}}(?!\d))"
+_PHONE = rf"(?<![\d+])(?<!\d\d[ -])(?:{_PREFIX})?{_NUMBER}(?!\d)(?![ -]\d{{2}}(?!\d))"
 
 _PREFIX_REGEX = re.compile(rf"^{_PREFIX}")
 _CONTEXT_REGEX = re.compile(r"\b(?:" + "|".join(re.escape(word) for word in CONTEXT_WORDS) + ")", re.IGNORECASE)
