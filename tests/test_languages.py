@@ -74,3 +74,10 @@ def test_a_capitalized_name_is_plausible():
 
 def test_an_all_caps_name_is_plausible():
     assert is_plausible_name("METTE HANSEN")
+
+
+def test_merging_keeps_overlapping_results_of_different_entity_types_apart():
+    person = RecognizerResult("PERSON", 0, 16, 0.85)
+    location = RecognizerResult("LOCATION", 10, 16, 0.85)
+
+    assert merge_results([person, location]) == [person, location]

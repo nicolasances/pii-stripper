@@ -1,5 +1,7 @@
 # F04 — Names and places (Danish + English NER)
 
+![Status](https://img.shields.io/badge/status-implemented-brightgreen?style=flat-square)
+
 ## 1. Purpose & Scope
 
 Detect and redact person names and, optionally, places using named entity recognition (NER) models for Danish and English. Names are the most common PII in documents and can't be caught with patterns.
@@ -70,3 +72,29 @@ This feature carries the **project's biggest risk**: whether Danish NER finds en
 | OQ-03 | What is an acceptable recall for Danish `PERSON` in v1? | Suggestion: ≥ 0.85 on synthetic documents, with the deny list (F05) as the fallback |
 | OQ-04 | How are names in all caps or in tables handled? | NER models often miss them; measure in the recall check |
 | OQ-05 | Does Presidio register its built-in recognizers for `en` only? | Must be verified against the Presidio docs; it affects how the `da` configuration is set up |
+
+## 8. Implementation Notes
+
+**Model decision (SC-03, OQ-01):** spaCy `da_core_news_md` and `en_core_web_md` (3.8.0), pinned in `pyproject.toml`. Run `python -m scripts.recall_check --seed N --show-misses` to reproduce. On 10 synthetic documents (5 Danish, 5 English, Faker `da_DK` / `en_US`), seeds 1-3, languages `da,en`:
+
+| Entity | Recall | Precision |
+|---|---|---|
+| Danish `PERSON` | 1.00 on all three seeds | 0.61-0.67 |
+| English `PERSON` | 0.90-0.95 | 0.95-1.00 |
+| `LOCATION` (all) | 0.90-1.00 | 0.82-1.00 |
+
+- Danish `PERSON` recall meets the ≥ 0.85 suggestion in OQ-03, so **DaCy is not needed on this evidence** and the medium spaCy models stay. Sizes `sm` and `lg` were not compared.
+- The result comes from templated, synthetic text with easy Faker names. Real documents will be harder, so treat it as a lower bar, not proof. OQ-04 (names in all caps or in tables) was **not measured**.
+- Danish precision is low: the model tags sentence starts such as `Vi har talt med` and `Vedr`, and includes salutations (`Kære Mette Hansen`, `Dear Ryan Mendez`) in the span. The name is still redacted, but so are the extra words. The allow list (F05) is the remedy.
+- The recall check counts a name as found when a same-type finding contains it, and a finding as correct when it overlaps an expected one of the same type.
+- A 10-page synthetic document took under 1 second (short pages, models already installed), well inside the SC-06 budget. Not measured on dense real pages.
+
+**`LOCATION` default (OQ-02):** off. Enable it with `--entities PERSON,LOCATION,...`. The default entity set is `PERSON`, `EMAIL_ADDRESS`, `DK_CPR` and `DK_PHONE`.
+
+**Design notes:**
+- `nlp.build_analyzer` creates a Presidio `AnalyzerEngine` with an explicit `SpacyNlpEngine` (one model per requested language) and one `SpacyRecognizer` per language. Danish labels `PER` and `LOC` and English `GPE` map to `PERSON` and `LOCATION`; every other label is ignored.
+- OQ-05 was sidestepped: the email, CPR and phone recognizers are language-independent and run once on the whole text, not registered per language in Presidio.
+- Findings from different languages are merged per entity type (highest score wins). Overlapping findings of different types are kept apart.
+- Two filters cut false positives from short snippets: an NER span that contains a digit or starts with a lowercase letter is dropped (the models tag `tlf` and `Nummer 0101901234`), and an NER span that overlaps an email, CPR or phone match is dropped so the pattern match wins. A consequence: a name directly followed by digits in the same span is not redacted as a name.
+- `--lang` and `--entities` validation errors, and a missing model, exit with code 1. The model check runs before processing and only when `PERSON` or `LOCATION` is requested. Nothing is ever downloaded at runtime.
+- The missing-model path is tested by faking `spacy.util.is_package`, not by cutting the network.

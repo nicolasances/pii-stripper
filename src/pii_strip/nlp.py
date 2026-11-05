@@ -61,13 +61,15 @@ def is_plausible_name(span: str) -> bool:
 
 
 def merge_results(results: list[RecognizerResult]) -> list[RecognizerResult]:
-    """Merge overlapping findings (e.g. from different languages) into one, keeping the highest score."""
+    """Merge overlapping findings of the same entity type (e.g. from different languages) into one, keeping the highest score."""
     merged: list[RecognizerResult] = []
 
     for result in sorted(results, key=lambda r: (r.start, r.end)):
-        if merged and result.start < merged[-1].end:
-            if result.score > merged[-1].score:
-                merged[-1] = result
+        previous = next((kept for kept in reversed(merged) if kept.entity_type == result.entity_type), None)
+
+        if previous is not None and result.start < previous.end:
+            if result.score > previous.score:
+                merged[merged.index(previous)] = result
         else:
             merged.append(result)
 
