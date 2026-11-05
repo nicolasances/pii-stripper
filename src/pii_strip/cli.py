@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 from pii_strip import __version__
+from pii_strip.nlp import ModelMissingError, SUPPORTED_ENTITIES, parse_entities, parse_languages, require_models, NER_ENTITIES
 from pii_strip.redactor import RedactionError, redact_pdf
 
 DISCLAIMER = "This tool is assistive, not a guarantee: no detector finds all personal data. Always review the output before you share it."
@@ -23,6 +24,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("input", type=Path, help="the PDF to redact")
     parser.add_argument("-o", "--output", type=Path, required=True, help="where to write the redacted PDF")
     parser.add_argument("--force", action="store_true", help="overwrite the output file if it already exists")
+    parser.add_argument("--lang", help="languages to analyze with, comma-separated (default: da,en)")
+    parser.add_argument("--entities", help=f"entity types to detect, comma-separated (default: PERSON,EMAIL_ADDRESS,DK_CPR,DK_PHONE; supported: {','.join(SUPPORTED_ENTITIES)})")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
     return parser
@@ -54,7 +57,18 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        redacted_areas = redact_pdf(args.input, args.output)
+        languages = parse_languages(args.lang)
+        entities = parse_entities(args.entities)
+
+        if any(entity in NER_ENTITIES for entity in entities):
+            require_models(languages)
+    except (ValueError, ModelMissingError) as error:
+        print(f"pii-strip: error: {error}", file=sys.stderr)
+
+        return 1
+
+    try:
+        redacted_areas = redact_pdf(args.input, args.output, languages, entities)
     except RedactionError as error:
         print(f"pii-strip: error: {error}", file=sys.stderr)
 

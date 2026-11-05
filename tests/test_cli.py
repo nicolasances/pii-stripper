@@ -127,3 +127,54 @@ def test_help_says_the_tool_is_assistive_and_not_a_guarantee(capsys):
     output = capsys.readouterr().out.lower()
     assert "not a guarantee" in output
     assert "review" in output
+
+
+def test_an_unsupported_language_exits_with_1(tmp_path, capsys):
+    source = make_pdf(tmp_path / "in.pdf", ["hello"])
+
+    exit_code = main([str(source), "-o", str(tmp_path / "out.pdf"), "--lang", "fr"])
+
+    assert exit_code == 1
+    assert "fr" in capsys.readouterr().err
+
+
+def test_an_unknown_entity_exits_with_1(tmp_path, capsys):
+    source = make_pdf(tmp_path / "in.pdf", ["hello"])
+
+    exit_code = main([str(source), "-o", str(tmp_path / "out.pdf"), "--entities", "CREDIT_CARD"])
+
+    assert exit_code == 1
+    assert "CREDIT_CARD" in capsys.readouterr().err
+
+
+def test_a_missing_model_exits_with_1_and_explains_how_to_install(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr("pii_strip.nlp.spacy.util.is_package", lambda name: False)
+    source = make_pdf(tmp_path / "in.pdf", ["hello"])
+
+    exit_code = main([str(source), "-o", str(tmp_path / "out.pdf")])
+
+    assert exit_code == 1
+    assert "pip install" in capsys.readouterr().err
+
+
+def test_cli_redacts_english_and_danish_names(tmp_path):
+    source = make_pdf(tmp_path / "in.pdf", ["Mary Johnson signed the letter yesterday.", "Mette Hansen har underskrevet brevet i går."])
+    output = tmp_path / "out.pdf"
+
+    exit_code = main([str(source), "-o", str(output)])
+
+    text = extract_text(output)
+    assert exit_code == 0
+    assert "Mary Johnson" not in text
+    assert "Mette Hansen" not in text
+
+
+def test_entities_flag_restricts_what_is_redacted(tmp_path):
+    source = make_pdf(tmp_path / "in.pdf", ["Mary Johnson wrote to mary@example.com"])
+    output = tmp_path / "out.pdf"
+
+    main([str(source), "-o", str(output), "--entities", "EMAIL_ADDRESS"])
+
+    text = extract_text(output)
+    assert "mary@example.com" not in text
+    assert "Mary Johnson" in text

@@ -1,7 +1,7 @@
 import pytest
 from presidio_analyzer import RecognizerResult
 
-from pii_strip.nlp import ModelMissingError, SUPPORTED_ENTITIES, merge_results, parse_entities, parse_languages, require_models
+from pii_strip.nlp import ModelMissingError, SUPPORTED_ENTITIES, is_plausible_name, merge_results, parse_entities, parse_languages, require_models
 
 
 def test_languages_default_to_danish_and_english():
@@ -58,3 +58,19 @@ def test_merging_combines_non_overlapping_results():
     second = RecognizerResult("PERSON", 10, 15, 0.7)
 
     assert merge_results([second, first]) == [first, second]
+
+
+def test_a_span_with_a_digit_is_not_a_plausible_name():
+    assert not is_plausible_name("Nummer 290200-1234")
+
+
+def test_a_span_starting_with_a_lowercase_letter_is_not_a_plausible_name():
+    assert not is_plausible_name("tlf")
+
+
+def test_a_capitalized_name_is_plausible():
+    assert is_plausible_name("Mette Hansen")
+
+
+def test_an_all_caps_name_is_plausible():
+    assert is_plausible_name("METTE HANSEN")

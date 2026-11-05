@@ -31,13 +31,13 @@ def _open_pdf(path: Path) -> pymupdf.Document:
     return doc
 
 
-def redact_pdf(input_path: Path, output_path: Path) -> int:
+def redact_pdf(input_path: Path, output_path: Path, languages: list[str] | None = None, entities: list[str] | None = None) -> int:
     """Write a copy of the input PDF with detected PII truly removed (not just covered). Returns the number of redacted areas."""
     doc = _open_pdf(input_path)
     redacted_areas = 0
 
     for page in doc:
-        for pii in find_pii_strings(page.get_text()):
+        for pii in find_pii_strings(page.get_text(), languages, entities):
             for rect in page.search_for(pii):
                 page.add_redact_annot(rect, fill=BLACK)
                 redacted_areas += 1
