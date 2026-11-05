@@ -33,21 +33,21 @@ def _open_pdf(path: Path) -> pymupdf.Document:
 
 def _is_whole_word_match(words_text: str, pii: str) -> bool:
     """True if the PII occurs in the words as whole words, or the words are a whole-word part of a PII that wraps over lines.
-    'An' is not a match inside 'Anbefalinger' or 'transformation', but is one in 'An Nguyen' and in "Mette's"."""
-    text, target = words_text.lower(), pii.lower()
-
-    if text.strip() and text in target:
+    'An' is not a match inside 'Anbefalinger' or 'transformation', but is one in 'An Nguyen' and in "Mette's".
+    The case must be the same as the detected string, or all capitals (a heading): a capitalised false positive such as 'With' must not redact every 'with'."""
+    if words_text.strip() and words_text in pii:
         return True
 
-    start = text.find(target)
+    for candidate in {pii, pii.upper()}:
+        start = words_text.find(candidate)
 
-    while start != -1:
-        end = start + len(target)
+        while start != -1:
+            end = start + len(candidate)
 
-        if (start == 0 or not text[start - 1].isalnum()) and (end == len(text) or not text[end].isalnum()):
-            return True
+            if (start == 0 or not words_text[start - 1].isalnum()) and (end == len(words_text) or not words_text[end].isalnum()):
+                return True
 
-        start = text.find(target, start + 1)
+            start = words_text.find(candidate, start + 1)
 
     return False
 

@@ -222,3 +222,25 @@ def test_a_name_split_across_two_lines_is_still_redacted(tmp_path, monkeypatch):
     text = extract_text(output)
     assert "Mette" not in text
     assert "Hansen" not in text
+
+
+def test_a_capitalised_detected_word_does_not_redact_the_same_word_in_lowercase(tmp_path, monkeypatch):
+    monkeypatch.setattr("pii_strip.redactor.find_pii_strings", lambda text, languages=None, entities=None: {"With"})
+    source = make_pdf(tmp_path / "in.pdf", ["With care. He works with the team."])
+    output = tmp_path / "out.pdf"
+
+    redact_pdf(source, output)
+
+    text = extract_text(output)
+    assert "works with the team" in text
+    assert "With care" not in text
+
+
+def test_a_name_written_in_capitals_is_still_redacted(tmp_path, monkeypatch):
+    monkeypatch.setattr("pii_strip.redactor.find_pii_strings", lambda text, languages=None, entities=None: {"Mette Hansen"})
+    source = make_pdf(tmp_path / "in.pdf", ["Signed: METTE HANSEN, today."])
+    output = tmp_path / "out.pdf"
+
+    redact_pdf(source, output)
+
+    assert "METTE" not in extract_text(output)
