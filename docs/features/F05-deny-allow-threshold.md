@@ -1,5 +1,7 @@
 # F05 — Deny list, allow list and threshold
 
+![Status](https://img.shields.io/badge/status-implemented-brightgreen?style=flat-square)
+
 ## 1. Purpose & Scope
 
 Give the developer manual control over what gets redacted:
@@ -41,7 +43,7 @@ This is the cheap safety net for the NER risk in F04.
 
 | # | Decision | Rationale |
 |---|----------|-----------|
-| TD-01 | Deny terms implemented as a Presidio deny-list recognizer, or as plain text search after detection | Either works; choose at implementation time based on how matching across line breaks behaves |
+| TD-01 | Deny terms are found by a plain text search (`find_deny_list_results` in `detector.py`), not a Presidio recognizer | Whitespace in a term also matches a line break, so a term that wraps over two lines is redacted. A deny finding keeps the case of the text, so the redactor needs no special case |
 | TD-02 | Deny wins over allow | For a PII tool, a false positive is cheaper than a leak |
 | TD-03 | Plain text files, not YAML or JSON | The simplest format to edit and to version |
 
@@ -59,6 +61,6 @@ This is the cheap safety net for the NER risk in F04.
 
 | # | Question | Notes |
 |---|----------|-------|
-| OQ-01 | Should the lists support regular expressions? | Powerful but easy to get wrong. Not in v1 |
-| OQ-02 | What is the right default threshold? | 0.5 as a start; tune with the recall check from F04 |
-| OQ-03 | Should a default allow list be shipped (e.g. "DR", "Danmarks Radio")? | Convenient, but it hides behavior from the user |
+| OQ-01 | Should the lists support regular expressions? | **Resolved:** no. Terms are matched literally (regex characters are escaped) |
+| OQ-02 | What is the right default threshold? | **Resolved for v1:** 0.5. Tune it later with the recall check from F04 |
+| OQ-03 | Should a default allow list be shipped (e.g. "DR", "Danmarks Radio")? | **Resolved:** no. It would hide behavior from the user |
