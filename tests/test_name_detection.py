@@ -40,3 +40,19 @@ def test_a_name_span_that_overlaps_an_email_is_not_reported_on_its_own():
 
 def test_patterns_still_fire_when_analyzing_with_one_language():
     assert find_pii_strings("Skriv til mette@example.com", languages=["en"]) == {"mette@example.com"}
+
+
+def test_a_company_name_is_not_detected_as_a_person():
+    found = find_pii_strings("Anna Hansen arbejder hos Novo Nordisk og Microsoft.")
+
+    assert "Anna Hansen" in found
+    assert "Novo Nordisk" not in found
+    assert "Microsoft" not in found
+
+
+def test_a_company_the_english_model_mistakes_for_a_person_is_not_detected():
+    assert find_pii_strings("Group CFO, Tryg") == set()
+
+
+def test_a_company_with_a_legal_suffix_is_not_detected():
+    assert "Tryg A/S" not in find_pii_strings("Tidligere Group CEO, Tryg A/S")

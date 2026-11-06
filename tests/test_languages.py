@@ -1,7 +1,7 @@
 import pytest
 from presidio_analyzer import RecognizerResult
 
-from pii_strip.nlp import ModelMissingError, SUPPORTED_ENTITIES, is_plausible_name, merge_results, parse_entities, parse_languages, require_models
+from pii_strip.nlp import ModelMissingError, without_organizations, SUPPORTED_ENTITIES, is_plausible_name, merge_results, parse_entities, parse_languages, require_models
 
 
 def test_languages_default_to_danish_and_english():
@@ -81,3 +81,45 @@ def test_merging_keeps_overlapping_results_of_different_entity_types_apart():
     location = RecognizerResult("LOCATION", 10, 16, 0.85)
 
     assert merge_results([person, location]) == [person, location]
+
+
+def test_a_person_finding_that_overlaps_an_organization_is_dropped():
+    person = RecognizerResult("PERSON", 0, 12, 0.85)
+    organization = RecognizerResult("ORGANIZATION", 0, 12, 0.85)
+
+    assert without_organizations([person, organization]) == []
+
+
+def test_a_location_that_is_a_small_part_of_an_organization_name_is_kept():
+    organization = RecognizerResult("ORGANIZATION", 0, 12, 0.85)
+    location = RecognizerResult("LOCATION", 5, 12, 0.85)
+
+    assert without_organizations([organization, location]) == [location]
+
+
+def test_a_location_that_is_the_same_span_as_an_organization_is_dropped():
+    organization = RecognizerResult("ORGANIZATION", 0, 9, 0.85)
+    location = RecognizerResult("LOCATION", 0, 9, 0.85)
+
+    assert without_organizations([organization, location]) == []
+
+
+def test_a_person_finding_that_does_not_overlap_an_organization_is_kept():
+    person = RecognizerResult("PERSON", 0, 12, 0.85)
+    organization = RecognizerResult("ORGANIZATION", 20, 30, 0.85)
+
+    assert without_organizations([person, organization]) == [person]
+
+
+def test_a_person_inside_a_much_longer_organization_span_is_kept():
+    person = RecognizerResult("PERSON", 0, 12, 0.85)
+    organization = RecognizerResult("ORGANIZATION", 0, 32, 0.85)
+
+    assert without_organizations([person, organization]) == [person]
+
+
+def test_a_company_name_that_is_a_bit_shorter_than_its_organization_span_is_dropped():
+    person = RecognizerResult("PERSON", 0, 12, 0.85)
+    organization = RecognizerResult("ORGANIZATION", 0, 19, 0.85)
+
+    assert without_organizations([person, organization]) == []

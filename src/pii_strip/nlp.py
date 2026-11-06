@@ -11,9 +11,10 @@ MODELS = {"da": "da_core_news_md", "en": "en_core_web_md"}
 SUPPORTED_ENTITIES = ["PERSON", "LOCATION", "EMAIL_ADDRESS", "DK_CPR", "DK_PHONE"]
 DEFAULT_ENTITIES = ["PERSON", "EMAIL_ADDRESS", "DK_CPR", "DK_PHONE"]
 NER_ENTITIES = ["PERSON", "LOCATION"]
-# The Danish model labels people PER and places LOC; the English model uses PERSON, GPE and LOC. Every other label is ignored.
-_LABEL_TO_ENTITY = {"PER": "PERSON", "PERSON": "PERSON", "LOC": "LOCATION", "GPE": "LOCATION"}
-_IGNORED_LABELS = ["ORG", "MISC", "DATE", "CARDINAL", "NORP", "FAC", "PRODUCT", "EVENT", "WORK_OF_ART", "LAW", "LANGUAGE", "TIME", "PERCENT", "MONEY", "QUANTITY", "ORDINAL"]
+# The Danish model labels people PER and places LOC; the English model uses PERSON, GPE and LOC. Organizations are kept only to veto mislabelled people and places; every other label is ignored.
+ORGANIZATION = "ORGANIZATION"
+_LABEL_TO_ENTITY = {"PER": "PERSON", "PERSON": "PERSON", "LOC": "LOCATION", "GPE": "LOCATION", "ORG": ORGANIZATION}
+_IGNORED_LABELS = ["MISC", "DATE", "CARDINAL", "NORP", "FAC", "PRODUCT", "EVENT", "WORK_OF_ART", "LAW", "LANGUAGE", "TIME", "PERCENT", "MONEY", "QUANTITY", "ORDINAL"]
 
 
 class ModelMissingError(Exception):
@@ -60,6 +61,24 @@ def is_plausible_name(span: str) -> bool:
     return span[:1].isupper() and not any(character.isdigit() for character in span)
 
 
+MIN_ORGANIZATION_OVERLAP = 0.6
+
+
+def _mostly_the_same_span(first: RecognizerResult, second: RecognizerResult) -> bool:
+    shared = min(first.end, second.end) - max(first.start, second.start)
+
+    return shared > 0 and shared / max(first.end - first.start, second.end - second.start) >= MIN_ORGANIZATION_OVERLAP
+
+
+def without_organizations(results: list[RecognizerResult]) -> list[RecognizerResult]:
+    """Company names are not personal data. One model often labels a company correctly while the other calls it a person (e.g. 'Novo Nordisk', 'Tryg'),
+    so a person or place that mostly coincides with an organization found by any model is dropped, and the organizations themselves are never reported.
+    A person inside a much longer organization span is kept: the models sometimes tag a whole clause as an organization, and a missed name is worse than a kept company."""
+    organizations = [result for result in results if result.entity_type == ORGANIZATION]
+
+    return [result for result in results if result.entity_type != ORGANIZATION and not any(_mostly_the_same_span(result, org) for org in organizations)]
+
+
 def merge_results(results: list[RecognizerResult]) -> list[RecognizerResult]:
     """Merge overlapping findings of the same entity type (e.g. from different languages) into one, keeping the highest score."""
     merged: list[RecognizerResult] = []
@@ -86,7 +105,7 @@ def build_analyzer(languages: tuple[str, ...]) -> AnalyzerEngine:
     registry = RecognizerRegistry(supported_languages=list(languages))
 
     for language in languages:
-        registry.add_recognizer(SpacyRecognizer(supported_language=language, supported_entities=NER_ENTITIES))
+        registry.add_recognizer(SpacyRecognizer(supported_language=language, supported_entities=NER_ENTITIES + [ORGANIZATION]))
 
     return AnalyzerEngine(registry=registry, nlp_engine=nlp_engine, supported_languages=list(languages))
 
@@ -99,6 +118,8 @@ def find_named_entities(text: str, languages: list[str], entities: list[str]) ->
         return []
 
     analyzer = build_analyzer(tuple(languages))
-    results = [result for language in languages for result in analyzer.analyze(text, language=language, entities=wanted)]
+    results = [result for language in languages for result in analyzer.analyze(text, language=language, entities=wanted + [ORGANIZATION])]
 
-    return merge_results([result for result in results if is_plausible_name(text[result.start:result.end])])
+    plausible = [result for result in results if result.entity_type == ORGANIZATION or is_plausible_name(text[result.start:result.end])]
+
+    return without_organizations(merge_results(plausible))
