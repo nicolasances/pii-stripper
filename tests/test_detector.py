@@ -48,3 +48,56 @@ def test_keeps_a_phone_result_that_does_not_overlap_a_cpr_result():
     cpr = RecognizerResult("DK_CPR", 0, 11, 0.85)
 
     assert without_phone_overlapping_cpr([phone], [cpr]) == [phone]
+
+
+# The NER models tag invented names and sentence starts, so the tests of the lists keep them out of the way
+ENTITIES_WITHOUT_NER = ["EMAIL_ADDRESS", "DK_CPR", "DK_PHONE"]
+
+
+def test_a_deny_term_is_found_even_though_nothing_else_is_detected():
+    assert find_pii_strings("Kontakt Zyxwv Qrstu i dag.", entities=ENTITIES_WITHOUT_NER, deny_terms=["Zyxwv Qrstu"]) == {"Zyxwv Qrstu"}
+
+
+def test_a_deny_term_matches_case_insensitively_and_keeps_the_case_of_the_text():
+    assert find_pii_strings("Kontakt ZYXWV og zyxwv i dag.", entities=ENTITIES_WITHOUT_NER, deny_terms=["Zyxwv"]) == {"ZYXWV", "zyxwv"}
+
+
+def test_a_deny_term_matches_whole_words_only():
+    assert find_pii_strings("Zyxwvs og Xzyxwv er ikke det samme.", entities=ENTITIES_WITHOUT_NER, deny_terms=["Zyxwv"]) == set()
+
+
+def test_a_deny_term_matches_across_a_line_break():
+    assert find_pii_strings("Kontakt Zyxwv\nQrstu i dag.", entities=ENTITIES_WITHOUT_NER, deny_terms=["Zyxwv Qrstu"]) == {"Zyxwv\nQrstu"}
+
+
+def test_a_deny_term_is_matched_literally_not_as_a_regular_expression():
+    assert find_pii_strings("Se a.c og abc.", entities=ENTITIES_WITHOUT_NER, deny_terms=["a.c"]) == {"a.c"}
+
+
+def test_a_deny_term_survives_the_maximum_threshold():
+    assert find_pii_strings("Kontakt Zyxwv Qrstu i dag.", entities=ENTITIES_WITHOUT_NER, threshold=1.0, deny_terms=["Zyxwv Qrstu"]) == {"Zyxwv Qrstu"}
+
+
+def test_an_allowed_term_is_not_reported():
+    assert find_pii_strings("Skriv til info@acme.dk", entities=ENTITIES_WITHOUT_NER, allow_terms=["info@acme.dk"]) == set()
+
+
+def test_an_allowed_term_matches_the_finding_case_insensitively():
+    assert find_pii_strings("Skriv til Info@ACME.dk", entities=ENTITIES_WITHOUT_NER, allow_terms=["info@acme.dk"]) == set()
+
+
+def test_a_finding_that_only_contains_an_allowed_term_is_kept():
+    assert find_pii_strings("Skriv til info@acme.dk", entities=ENTITIES_WITHOUT_NER, allow_terms=["acme"]) == {"info@acme.dk"}
+
+
+def test_a_term_on_both_lists_is_reported():
+    assert find_pii_strings("Kontakt Zyxwv Qrstu i dag.", entities=ENTITIES_WITHOUT_NER, allow_terms=["Zyxwv Qrstu"], deny_terms=["zyxwv qrstu"]) == {"Zyxwv Qrstu"}
+
+
+def test_a_higher_threshold_drops_findings_below_it():
+    assert find_pii_strings("tlf. 12345678", entities=ENTITIES_WITHOUT_NER) == {"12345678"}
+    assert find_pii_strings("tlf. 12345678", entities=ENTITIES_WITHOUT_NER, threshold=0.99) == set()
+
+
+def test_a_lower_threshold_keeps_weaker_findings():
+    assert find_pii_strings("Reference 12345678 oplyst.", threshold=0.0) != set()
