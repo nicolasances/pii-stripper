@@ -1,5 +1,7 @@
 # F06 — Sanitize metadata, annotations and attachments
 
+![Status](https://img.shields.io/badge/status-implemented-brightgreen?style=flat-square)
+
 ## 1. Purpose & Scope
 
 Remove PII from the parts of a PDF that aren't visible page text: document metadata, XMP metadata, annotations and comments, form fields, embedded files and bookmarks. These are routinely forgotten, and they leak PII even when the page text is clean.
@@ -41,6 +43,7 @@ Remove PII from the parts of a PDF that aren't visible page text: document metad
 | TD-01 | Remove hidden content whole rather than analyzing it for PII | Simpler and safer; this content is rarely needed in a shared copy |
 | TD-02 | Sanitizing can't be turned off | Removes a way to get it wrong |
 | TD-03 | Bookmarks are removed by default, with an opt-out | Bookmark titles can contain names, but they're useful in long documents |
+| TD-04 | Counts are a `SanitizeCounts` dataclass (`sanitize.py`). `redact_pdf` keeps returning the number of redacted areas and fills an optional `counts` argument | Avoids changing the return value before F09 defines the report |
 
 ## 6. Success Criteria
 
@@ -55,7 +58,7 @@ Remove PII from the parts of a PDF that aren't visible page text: document metad
 
 | # | Question | Notes |
 |---|----------|-------|
-| OQ-01 | Should form fields be removed or flattened? | Removing loses non-PII content; flattening keeps visible values, which then need redaction (requires running detection after flattening) |
-| OQ-02 | Should link annotations to URLs be kept? | They're rarely PII, but URLs can contain email addresses or usernames |
-| OQ-03 | Should JavaScript and other active content be removed as well? | Not PII, but a good hygiene step for shared files |
-| OQ-04 | Is the raw-byte check reliable when streams are compressed? | Text in compressed streams won't show up in a raw byte search. Decompress before searching, or check via the PDF library |
+| OQ-01 | Should form fields be removed or flattened? | **Resolved:** removed, values included. Flattening would need detection to run again afterwards |
+| OQ-02 | Should link annotations to URLs be kept? | **Resolved:** no. All annotations are removed, links included |
+| OQ-03 | Should JavaScript and other active content be removed as well? | **Open.** Not PII, but a good hygiene step for shared files. Not done in F06 |
+| OQ-04 | Is the raw-byte check reliable when streams are compressed? | **Resolved:** the tests check the raw bytes and also decompress every object through the PDF library |
