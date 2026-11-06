@@ -75,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        redacted_areas = redact_pdf(args.input, args.output, languages, entities)
+        redacted_areas = redact_pdf(args.input, args.output, languages, entities, threshold, allow_terms, deny_terms)
     except RedactionError as error:
         print(f"pii-strip: error: {error}", file=sys.stderr)
 
