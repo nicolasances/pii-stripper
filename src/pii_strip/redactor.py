@@ -68,9 +68,9 @@ def _whole_word_hits(page: pymupdf.Page, pii: str, words: list) -> list[pymupdf.
     return hits
 
 
-def redact_pdf(input_path: Path, output_path: Path, languages: list[str] | None = None, entities: list[str] | None = None, threshold: float = DEFAULT_THRESHOLD, allow_terms: list[str] | None = None, deny_terms: list[str] | None = None, counts: SanitizeCounts | None = None) -> int:
+def redact_pdf(input_path: Path, output_path: Path, languages: list[str] | None = None, entities: list[str] | None = None, threshold: float = DEFAULT_THRESHOLD, allow_terms: list[str] | None = None, deny_terms: list[str] | None = None, keep_outline: bool = False, counts: SanitizeCounts | None = None) -> int:
     """Write a copy of the input PDF with detected PII truly removed (not just covered). Returns the number of redacted areas.
-    Hidden content (metadata, XMP, annotations, form fields, embedded files) is always removed; the counts of what was removed are written to `counts` if given."""
+    Hidden content (metadata, XMP, annotations, form fields, embedded files, and bookmarks unless keep_outline is set) is always removed; the counts of what was removed are written to `counts` if given."""
     doc = _open_pdf(input_path)
     redacted_areas = 0
 
@@ -84,7 +84,7 @@ def redact_pdf(input_path: Path, output_path: Path, languages: list[str] | None 
 
         page.apply_redactions()
 
-    sanitize_counts = sanitize(doc)
+    sanitize_counts = sanitize(doc, keep_outline)
 
     if counts is not None:
         counts.__dict__.update(sanitize_counts.__dict__)

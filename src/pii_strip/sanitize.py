@@ -14,6 +14,7 @@ class SanitizeCounts:
     annotations: int = 0
     form_fields: int = 0
     embedded_files: int = 0
+    bookmarks: int = 0
 
 
 def _remove_form_fields(doc: pymupdf.Document) -> int:
@@ -52,6 +53,13 @@ def _remove_embedded_files(doc: pymupdf.Document) -> int:
     return len(names)
 
 
+def _remove_bookmarks(doc: pymupdf.Document) -> int:
+    removed = len(doc.get_toc())
+    doc.set_toc([])
+
+    return removed
+
+
 def _clear_metadata(doc: pymupdf.Document) -> int:
     cleared = sum(1 for field in METADATA_FIELDS if doc.metadata.get(field))
     doc.set_metadata({})
@@ -66,12 +74,13 @@ def _remove_xmp(doc: pymupdf.Document) -> int:
     return 1 if had_xmp else 0
 
 
-def sanitize(doc: pymupdf.Document) -> SanitizeCounts:
-    """Remove the hidden content from the document, in place: metadata, XMP, annotations, form fields and embedded files."""
+def sanitize(doc: pymupdf.Document, keep_outline: bool = False) -> SanitizeCounts:
+    """Remove the hidden content from the document, in place: metadata, XMP, annotations, form fields, embedded files and, unless kept, bookmarks."""
     counts = SanitizeCounts()
     counts.form_fields = _remove_form_fields(doc)
     counts.annotations = _remove_annotations(doc)
     counts.embedded_files = _remove_embedded_files(doc)
+    counts.bookmarks = 0 if keep_outline else _remove_bookmarks(doc)
     counts.metadata_fields = _clear_metadata(doc)
     counts.xmp = _remove_xmp(doc)
 

@@ -241,3 +241,20 @@ def test_the_threshold_flag_reaches_the_detector(tmp_path):
 
     assert exit_code == 0
     assert "12345678" in extract_text(output)
+
+
+def test_cli_removes_bookmarks_by_default_and_keeps_them_with_keep_outline(tmp_path):
+    from tests.support.pdf_factory import HIDDEN_PII, make_hidden_pii_pdf
+    import pymupdf
+
+    source = make_hidden_pii_pdf(tmp_path / "in.pdf")
+    removed = tmp_path / "removed.pdf"
+    kept = tmp_path / "kept.pdf"
+
+    assert main([str(source), "-o", str(removed)]) == 0
+    assert main([str(source), "-o", str(kept), "--keep-outline"]) == 0
+
+    removed_doc = pymupdf.open(removed)
+    kept_doc = pymupdf.open(kept)
+    assert removed_doc.get_toc() == []
+    assert [entry[1] for entry in kept_doc.get_toc()] == [HIDDEN_PII["bookmark"]]

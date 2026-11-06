@@ -129,3 +129,30 @@ def test_counts_each_sanitize_action(tmp_path):
     assert counts.annotations == 1
     assert counts.form_fields == 1
     assert counts.embedded_files == 1
+
+
+def test_bookmarks_are_removed_by_default(tmp_path):
+    source = make_hidden_pii_pdf(tmp_path / "in.pdf")
+    output = tmp_path / "out.pdf"
+    counts = SanitizeCounts()
+
+    redact_pdf(source, output, counts=counts)
+
+    doc = pymupdf.open(output)
+    assert doc.get_toc() == []
+    doc.close()
+    assert not raw_bytes_contain(output, HIDDEN_PII["bookmark"])
+    assert counts.bookmarks == 1
+
+
+def test_bookmarks_are_kept_with_keep_outline(tmp_path):
+    source = make_hidden_pii_pdf(tmp_path / "in.pdf")
+    output = tmp_path / "out.pdf"
+    counts = SanitizeCounts()
+
+    redact_pdf(source, output, keep_outline=True, counts=counts)
+
+    doc = pymupdf.open(output)
+    assert [entry[1] for entry in doc.get_toc()] == [HIDDEN_PII["bookmark"]]
+    doc.close()
+    assert counts.bookmarks == 0

@@ -30,6 +30,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--deny", type=Path, help="a text file with one term per line that is always redacted")
     parser.add_argument("--allow", type=Path, help="a text file with one term per line that is never redacted (a term in both lists is redacted)")
     parser.add_argument("--threshold", help=f"minimum score, from 0 to 1, for a finding to be redacted (default: {DEFAULT_THRESHOLD})")
+    parser.add_argument("--keep-outline", action="store_true", help="keep the bookmarks (outline); they are removed by default because their titles can contain names")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
     return parser
@@ -75,7 +76,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        redacted_areas = redact_pdf(args.input, args.output, languages, entities, threshold, allow_terms, deny_terms)
+        redacted_areas = redact_pdf(args.input, args.output, languages, entities, threshold, allow_terms, deny_terms, args.keep_outline)
     except RedactionError as error:
         print(f"pii-strip: error: {error}", file=sys.stderr)
 
