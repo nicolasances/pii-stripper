@@ -1,5 +1,7 @@
 # F09 — JSON report and summary line
 
+![Status](https://img.shields.io/badge/status-implemented-brightgreen?style=flat-square)
+
 ## 1. Purpose & Scope
 
 Tell the developer what happened in each run. A one-line summary always goes to stderr. An optional JSON report lists every finding, every sanitize action and the verification result, **without** writing the PII itself, so the report can't become a new leak.
@@ -46,8 +48,15 @@ The report format is also the basis for a later interactive `scan` → edit → 
 | # | Decision | Rationale |
 |---|----------|-----------|
 | TD-01 | Hash matched text with SHA-256 by default | Makes the report safe to keep or share while still allowing a lookup |
-| TD-02 | Unsalted hash | Lets a developer check "was X redacted?". Weakness: short values such as CPR numbers can be brute-forced from a hash, see OQ-01 |
+| TD-02 | Unsalted hash, except for CPR numbers, which get `"sha256": null` | Lets a developer check "was X redacted?". CPR numbers have a small value space and could be brute-forced from a hash (OQ-01) |
 | TD-03 | Summary on stderr, not stdout | Leaves stdout free for future machine-readable output |
+| TD-04 | `redact_pdf` fills an optional `findings` list with one `Finding` per distinct string per page (entity type, page, score, language, source, areas) | Same out-parameter pattern as `counts` (F06), `redacted` (F07) and `image_only_pages` (F08) |
+| TD-05 | Source is `ner`, `pattern` or `deny_list`; language is the model that found a name, `null` for patterns and the deny list | NER results are tagged with their language before the cross-language merge, so the kept result keeps its language |
+| TD-06 | The summary counts redacted areas, not distinct strings, and the pages that have at least one area | A string found but missed by the redaction search is reported by the verification instead |
+| TD-07 | Residuals in the report have only the entity type and page | `Residual` never held text (F07), so it can't leak, even with `--report-include-text` |
+| TD-08 | The report path may not be the input or output file; `--report-include-text` without `--report` is a usage error (exit `1`) | Avoids overwriting the PDF with JSON and silently ignored flags |
+| TD-09 | If the report can't be written, the exit code is `1`, or `2` if PII is left in the output | `2` ("don't share the output") is the more important signal |
+| TD-10 | An existing report file is overwritten, without `--force` | The report is a by-product of the run, not the user's document |
 
 ## 6. Success Criteria
 
@@ -63,5 +72,5 @@ The report format is also the basis for a later interactive `scan` → edit → 
 
 | # | Question | Notes |
 |---|----------|-------|
-| OQ-01 | Is an unsalted hash acceptable? | CPR numbers have a small value space and can be brute-forced from their hashes. Options: a salted hash per run (loses the lookup), or leave CPR hashes out of the report |
+| OQ-01 | Is an unsalted hash acceptable? | **Resolved:** unsalted for all entity types except CPR numbers, whose hash is left out (TD-02) |
 | OQ-02 | Should a JSON Schema file be published in the repo? | Useful for the future `apply` command |

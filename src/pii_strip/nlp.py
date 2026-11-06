@@ -62,6 +62,7 @@ def is_plausible_name(span: str) -> bool:
 
 
 MIN_ORGANIZATION_OVERLAP = 0.6
+LANGUAGE_KEY = "language"
 
 
 def _mostly_the_same_span(first: RecognizerResult, second: RecognizerResult) -> bool:
@@ -95,6 +96,13 @@ def merge_results(results: list[RecognizerResult]) -> list[RecognizerResult]:
     return merged
 
 
+def _with_language(result: RecognizerResult, language: str) -> RecognizerResult:
+    """Record which language's model found the result, for the report (F09)."""
+    result.recognition_metadata = {**(result.recognition_metadata or {}), LANGUAGE_KEY: language}
+
+    return result
+
+
 @lru_cache(maxsize=None)
 def build_analyzer(languages: tuple[str, ...]) -> AnalyzerEngine:
     """An analyzer with an explicit spaCy model per language. No default model is ever loaded or downloaded."""
@@ -118,7 +126,7 @@ def find_named_entities(text: str, languages: list[str], entities: list[str]) ->
         return []
 
     analyzer = build_analyzer(tuple(languages))
-    results = [result for language in languages for result in analyzer.analyze(text, language=language, entities=wanted + [ORGANIZATION])]
+    results = [_with_language(result, language) for language in languages for result in analyzer.analyze(text, language=language, entities=wanted + [ORGANIZATION])]
 
     plausible = [result for result in results if result.entity_type == ORGANIZATION or is_plausible_name(text[result.start:result.end])]
 

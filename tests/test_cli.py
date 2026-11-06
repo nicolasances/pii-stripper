@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from faker import Faker
 
@@ -348,3 +350,139 @@ def test_pii_left_in_the_output_exits_with_2_even_with_image_only_pages(tmp_path
     err = capsys.readouterr().err
     assert exit_code == 2
     assert "image-only" in err
+
+
+def test_a_summary_line_is_printed_on_stderr_by_default(tmp_path, capsys):
+    source = make_pdf(tmp_path / "in.pdf", [f"Write to {fake.email()} please"])
+
+    main([str(source), "-o", str(tmp_path / "out.pdf"), "--entities", "EMAIL_ADDRESS"])
+
+    captured = capsys.readouterr()
+    assert "redacted 1 item on 1 page (EMAIL_ADDRESS 1)" in captured.err
+    assert "verification OK" in captured.err
+    assert captured.out == ""
+
+
+def test_quiet_suppresses_the_summary_line(tmp_path, capsys):
+    source = make_pdf(tmp_path / "in.pdf", [f"Write to {fake.email()} please"])
+
+    exit_code = main([str(source), "-o", str(tmp_path / "out.pdf"), "--entities", "EMAIL_ADDRESS", "--quiet"])
+
+    assert exit_code == 0
+    assert capsys.readouterr().err == ""
+
+
+def test_quiet_still_prints_warnings_and_errors(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr("pii_strip.redactor._whole_word_hits", lambda page, pii, words: [])
+    source = make_mixed_pdf(tmp_path / "in.pdf", [f"Write to {fake.email()} please", (IMAGE_PAGE, "Scanned page")])
+
+    main([str(source), "-o", str(tmp_path / "out.pdf"), "--entities", "EMAIL_ADDRESS", "--quiet"])
+
+    err = capsys.readouterr().err
+    assert "image-only" in err
+    assert "not clean" in err
+    assert "verification" not in err
+
+
+def test_report_writes_a_json_file_with_every_section(tmp_path):
+    source = make_pdf(tmp_path / "in.pdf", [f"Write to {fake.email()} please"])
+    report_path = tmp_path / "findings.json"
+
+    exit_code = main([str(source), "-o", str(tmp_path / "out.pdf"), "--entities", "EMAIL_ADDRESS", "--report", str(report_path)])
+
+    report = json.loads(report_path.read_text())
+    assert set(report) == {"schema_version", "tool", "run", "configuration", "findings", "image_only_pages", "sanitize", "verification", "exit_code"}
+    assert report["exit_code"] == exit_code == 0
+    assert report["configuration"]["entities"] == ["EMAIL_ADDRESS"]
+    assert [finding["entity_type"] for finding in report["findings"]] == ["EMAIL_ADDRESS"]
+
+
+def test_the_report_holds_none_of_the_pii_by_default(tmp_path):
+    email = fake.email()
+    name = "Margaret Thompson"
+    cpr = "010190-1234"
+    deny_term = "Bluebird"
+    deny_file = tmp_path / "deny.txt"
+    deny_file.write_text(deny_term)
+    source = make_pdf(tmp_path / "in.pdf", [f"{name} wrote to {email} about project {deny_term}.", f"CPR {cpr} er oplyst."])
+    report_path = tmp_path / "findings.json"
+
+    main([str(source), "-o", str(tmp_path / "out.pdf"), "--deny", str(deny_file), "--report", str(report_path)])
+
+    content = report_path.read_text()
+    assert {"EMAIL_ADDRESS", "PERSON", "DK_CPR", "DENY_LIST"} <= {finding["entity_type"] for finding in json.loads(content)["findings"]}
+    for pii in (email, name, "Margaret", "Thompson", cpr, "0101901234", deny_term):
+        assert pii not in content
+
+
+def test_a_report_is_written_when_pii_is_left_and_the_exit_code_is_2(tmp_path, monkeypatch):
+    monkeypatch.setattr("pii_strip.redactor._whole_word_hits", lambda page, pii, words: [])
+    source = make_pdf(tmp_path / "in.pdf", [f"Write to {fake.email()} please"])
+    report_path = tmp_path / "findings.json"
+
+    exit_code = main([str(source), "-o", str(tmp_path / "out.pdf"), "--entities", "EMAIL_ADDRESS", "--report", str(report_path)])
+
+    report = json.loads(report_path.read_text())
+    assert exit_code == report["exit_code"] == 2
+    assert report["verification"] == {"status": "failed", "residuals": [{"entity_type": "EMAIL_ADDRESS", "page": 1}]}
+
+
+def test_a_report_is_written_with_the_image_only_pages_and_the_exit_code_3(tmp_path):
+    source = make_mixed_pdf(tmp_path / "in.pdf", [f"Write to {fake.email()} please", (IMAGE_PAGE, "Scanned page")])
+    report_path = tmp_path / "findings.json"
+
+    exit_code = main([str(source), "-o", str(tmp_path / "out.pdf"), "--entities", "EMAIL_ADDRESS", "--report", str(report_path)])
+
+    report = json.loads(report_path.read_text())
+    assert exit_code == report["exit_code"] == 3
+    assert report["image_only_pages"] == [2]
+
+
+def test_no_report_is_written_when_the_run_fails_before_processing(tmp_path):
+    report_path = tmp_path / "findings.json"
+
+    exit_code = main([str(tmp_path / "nope.pdf"), "-o", str(tmp_path / "out.pdf"), "--report", str(report_path)])
+
+    assert exit_code == 1
+    assert not report_path.exists()
+
+
+def test_the_report_may_not_be_the_input_or_the_output_file(tmp_path, capsys):
+    source = make_pdf(tmp_path / "in.pdf", ["Hello"])
+
+    exit_code = main([str(source), "-o", str(tmp_path / "out.pdf"), "--report", str(tmp_path / "out.pdf")])
+
+    assert exit_code == 1
+    assert "report" in capsys.readouterr().err.lower()
+
+
+def test_a_report_that_cannot_be_written_exits_with_1(tmp_path, capsys):
+    source = make_pdf(tmp_path / "in.pdf", [f"Write to {fake.email()} please"])
+
+    exit_code = main([str(source), "-o", str(tmp_path / "out.pdf"), "--entities", "EMAIL_ADDRESS", "--report", str(tmp_path / "missing-folder" / "findings.json")])
+
+    assert exit_code == 1
+    assert "report" in capsys.readouterr().err.lower()
+
+
+def test_report_include_text_writes_the_matched_text_and_warns(tmp_path, capsys):
+    email = fake.email()
+    source = make_pdf(tmp_path / "in.pdf", [f"Write to {email} please"])
+    report_path = tmp_path / "findings.json"
+
+    main([str(source), "-o", str(tmp_path / "out.pdf"), "--entities", "EMAIL_ADDRESS", "--report", str(report_path), "--report-include-text", "--quiet"])
+
+    assert json.loads(report_path.read_text())["findings"][0]["text"] == email
+    err = capsys.readouterr().err
+    assert "warning" in err
+    assert "contains personal data" in err
+    assert email not in err
+
+
+def test_report_include_text_without_report_exits_with_1(tmp_path, capsys):
+    source = make_pdf(tmp_path / "in.pdf", ["Hello"])
+
+    exit_code = main([str(source), "-o", str(tmp_path / "out.pdf"), "--report-include-text"])
+
+    assert exit_code == 1
+    assert "--report" in capsys.readouterr().err

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pymupdf
 
-from pii_strip.detector import find_pii_entity_types
+from pii_strip.detector import find_distinct_pii_results, language_of, source_of
 from pii_strip.sanitize import SanitizeCounts, sanitize
 from pii_strip.term_lists import DEFAULT_THRESHOLD
 
@@ -20,6 +20,19 @@ class RedactedString:
 
     text: str
     entity_type: str
+
+
+@dataclass(frozen=True)
+class Finding:
+    """A string redacted on a page (from 1), how it was found, and the areas (x0, y0, x1, y1) blacked out for it. Passed to the summary and the report (F09)."""
+
+    text: str
+    entity_type: str
+    page: int
+    score: float
+    language: str | None
+    source: str
+    areas: tuple[tuple[float, float, float, float], ...]
 
 
 def _open_pdf(path: Path) -> pymupdf.Document:
@@ -82,11 +95,12 @@ def _is_image_only(page: pymupdf.Page, text: str) -> bool:
     return not text.strip() and len(page.get_images()) > 0
 
 
-def redact_pdf(input_path: Path, output_path: Path, languages: list[str] | None = None, entities: list[str] | None = None, threshold: float = DEFAULT_THRESHOLD, allow_terms: list[str] | None = None, deny_terms: list[str] | None = None, keep_outline: bool = False, counts: SanitizeCounts | None = None, redacted: list[RedactedString] | None = None, image_only_pages: list[int] | None = None) -> int:
+def redact_pdf(input_path: Path, output_path: Path, languages: list[str] | None = None, entities: list[str] | None = None, threshold: float = DEFAULT_THRESHOLD, allow_terms: list[str] | None = None, deny_terms: list[str] | None = None, keep_outline: bool = False, counts: SanitizeCounts | None = None, redacted: list[RedactedString] | None = None, image_only_pages: list[int] | None = None, findings: list[Finding] | None = None) -> int:
     """Write a copy of the input PDF with detected PII truly removed (not just covered). Returns the number of redacted areas.
     Hidden content (metadata, XMP, annotations, form fields, embedded files, and bookmarks unless keep_outline is set) is always removed; the counts of what was removed are written to `counts` if given.
     Every string detected as PII is appended to `redacted` if given, also when no area was found for it on the page.
-    The number (from 1) of every page that has no text but an image, and so can't be checked, is appended to `image_only_pages` if given. Those pages are passed through unchanged."""
+    The number (from 1) of every page that has no text but an image, and so can't be checked, is appended to `image_only_pages` if given. Those pages are passed through unchanged.
+    Every distinct string detected on a page is appended to `findings` if given, with its areas on that page (none if the redaction search misses it)."""
     doc = _open_pdf(input_path)
     redacted_areas = 0
 
@@ -97,13 +111,18 @@ def redact_pdf(input_path: Path, output_path: Path, languages: list[str] | None 
         if image_only_pages is not None and _is_image_only(page, text):
             image_only_pages.append(number)
 
-        for pii, entity_type in find_pii_entity_types(text, languages, entities, threshold, allow_terms, deny_terms).items():
+        for pii, result in find_distinct_pii_results(text, languages, entities, threshold, allow_terms, deny_terms).items():
             if redacted is not None:
-                redacted.append(RedactedString(pii, entity_type))
+                redacted.append(RedactedString(pii, result.entity_type))
 
-            for rect in _whole_word_hits(page, pii, words):
+            rects = _whole_word_hits(page, pii, words)
+
+            for rect in rects:
                 page.add_redact_annot(rect, fill=BLACK)
                 redacted_areas += 1
+
+            if findings is not None:
+                findings.append(Finding(pii, result.entity_type, number, result.score, language_of(result), source_of(result), tuple((rect.x0, rect.y0, rect.x1, rect.y1) for rect in rects)))
 
         page.apply_redactions()
 
