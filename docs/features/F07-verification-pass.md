@@ -1,5 +1,7 @@
 # F07 — Verification pass and exit code 2
 
+![Status](https://img.shields.io/badge/status-implemented-brightgreen?style=flat-square)
+
 ## 1. Purpose & Scope
 
 After saving, the tool checks its own output: it reopens the PDF, extracts the text again and confirms that no redacted string and no detectable PII is left. If anything remains, it exits with code `2`.
@@ -41,6 +43,9 @@ This turns "I hope it worked" into something a developer and a script can rely o
 | TD-01 | Reopen from disk instead of reusing the in-memory document | Verifies what is actually in the file, including the save step |
 | TD-02 | Keep the output on failure | Developers need to see what went wrong; the exit code and message prevent misuse |
 | TD-03 | Verification is always on | It's cheap for typical document sizes, and the guarantee matters most |
+| TD-04 | The residual-string check is case-insensitive and whole-word, and whitespace inside a string also matches a line break | Same matching as the redaction and the deny list, so `An` isn't reported inside `Anbefalinger`. Note: a detected word such as `With` is only redacted where its case matches, so a lowercase `with` elsewhere is reported as a residual. This errs on the safe side |
+| TD-05 | `redact_pdf` fills an optional `redacted` list with every detected string and its entity type (`RedactedString`), also when no area was found on the page. Verification lives in `verify.py` and the CLI calls it after saving | Same pattern as `counts` in F06. Recording detected strings, not redacted areas, is what lets verification catch strings the search missed |
+| TD-06 | Residuals are reported once per entity type and page | A list of `PERSON on page 2` lines is enough to know where to look |
 
 ## 6. Success Criteria
 
@@ -55,5 +60,5 @@ This turns "I hope it worked" into something a developer and a script can rely o
 
 | # | Question | Notes |
 |---|----------|-------|
-| OQ-01 | How should residuals be shown on stderr without leaking them into logs? | Options: entity type + page only; masked text (`J*** H*****`); full text only with a `--verbose` flag |
-| OQ-02 | Should a failed verification delete the output instead? | Safer, but harder to debug. Current proposal: keep it |
+| OQ-01 | How should residuals be shown on stderr without leaking them into logs? | **Resolved:** entity type and page only (`EMAIL_ADDRESS on page 2`). No text, not even masked |
+| OQ-02 | Should a failed verification delete the output instead? | **Resolved:** no, the output is kept (TD-02). The message says it is not clean and must not be shared |

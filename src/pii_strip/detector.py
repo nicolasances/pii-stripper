@@ -58,3 +58,8 @@ def find_pii_results(text: str, languages: list[str] | None = None, entities: li
 def find_pii_strings(text: str, languages: list[str] | None = None, entities: list[str] | None = None, threshold: float = DEFAULT_THRESHOLD, allow_terms: list[str] | None = None, deny_terms: list[str] | None = None) -> set[str]:
     """Return the distinct strings in the text that are detected as PII."""
     return {text[result.start:result.end] for result in find_pii_results(text, languages, entities, threshold, allow_terms, deny_terms)}
+
+
+def find_pii_entity_types(text: str, languages: list[str] | None = None, entities: list[str] | None = None, threshold: float = DEFAULT_THRESHOLD, allow_terms: list[str] | None = None, deny_terms: list[str] | None = None) -> dict[str, str]:
+    """Return the distinct strings in the text that are detected as PII, each with its entity type."""
+    return {text[result.start:result.end]: result.entity_type for result in find_pii_results(text, languages, entities, threshold, allow_terms, deny_terms)}
