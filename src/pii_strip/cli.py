@@ -4,8 +4,9 @@ from pathlib import Path
 
 from pii_strip import __version__
 from pii_strip.nlp import ModelMissingError, SUPPORTED_ENTITIES, parse_entities, parse_languages, require_models, NER_ENTITIES
-from pii_strip.redactor import RedactionError, redact_pdf
+from pii_strip.redactor import RedactedString, RedactionError, redact_pdf
 from pii_strip.term_lists import DEFAULT_THRESHOLD, parse_threshold, read_term_list
+from pii_strip.verify import verify_pdf
 
 DISCLAIMER = "This tool is assistive, not a guarantee: no detector finds all personal data. Always review the output before you share it."
 
@@ -75,14 +76,26 @@ def main(argv: list[str] | None = None) -> int:
 
         return 1
 
+    redacted: list[RedactedString] = []
+
     try:
-        redacted_areas = redact_pdf(args.input, args.output, languages, entities, threshold, allow_terms, deny_terms, args.keep_outline)
+        redacted_areas = redact_pdf(args.input, args.output, languages, entities, threshold, allow_terms, deny_terms, args.keep_outline, redacted=redacted)
     except RedactionError as error:
         print(f"pii-strip: error: {error}", file=sys.stderr)
 
         return 1
 
     print(f"redacted {redacted_areas} item(s)", file=sys.stderr)
+
+    residuals = verify_pdf(args.output, redacted, languages, entities, threshold, allow_terms, deny_terms)
+
+    if residuals:
+        print(f"pii-strip: error: the output is not clean: personal data is still in {args.output}. The file was kept so you can inspect it. Do not share it.", file=sys.stderr)
+
+        for residual in residuals:
+            print(f"  {residual.entity_type} on page {residual.page}", file=sys.stderr)
+
+        return 2
 
     return 0
 

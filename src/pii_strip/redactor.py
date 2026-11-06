@@ -1,8 +1,9 @@
+from dataclasses import dataclass
 from pathlib import Path
 
 import pymupdf
 
-from pii_strip.detector import find_pii_strings
+from pii_strip.detector import find_pii_entity_types
 from pii_strip.sanitize import SanitizeCounts, sanitize
 from pii_strip.term_lists import DEFAULT_THRESHOLD
 
@@ -11,6 +12,14 @@ BLACK = (0, 0, 0)
 
 class RedactionError(Exception):
     """A problem with the input or output that the user can fix. The message is safe to show."""
+
+
+@dataclass(frozen=True)
+class RedactedString:
+    """A string that was detected as PII and meant to be redacted. Passed to the verification (F07)."""
+
+    text: str
+    entity_type: str
 
 
 def _open_pdf(path: Path) -> pymupdf.Document:
@@ -68,16 +77,21 @@ def _whole_word_hits(page: pymupdf.Page, pii: str, words: list) -> list[pymupdf.
     return hits
 
 
-def redact_pdf(input_path: Path, output_path: Path, languages: list[str] | None = None, entities: list[str] | None = None, threshold: float = DEFAULT_THRESHOLD, allow_terms: list[str] | None = None, deny_terms: list[str] | None = None, keep_outline: bool = False, counts: SanitizeCounts | None = None) -> int:
+def redact_pdf(input_path: Path, output_path: Path, languages: list[str] | None = None, entities: list[str] | None = None, threshold: float = DEFAULT_THRESHOLD, allow_terms: list[str] | None = None, deny_terms: list[str] | None = None, keep_outline: bool = False, counts: SanitizeCounts | None = None, redacted: list[RedactedString] | None = None) -> int:
     """Write a copy of the input PDF with detected PII truly removed (not just covered). Returns the number of redacted areas.
-    Hidden content (metadata, XMP, annotations, form fields, embedded files, and bookmarks unless keep_outline is set) is always removed; the counts of what was removed are written to `counts` if given."""
+    Hidden content (metadata, XMP, annotations, form fields, embedded files, and bookmarks unless keep_outline is set) is always removed; the counts of what was removed are written to `counts` if given.
+    Every string detected as PII is appended to `redacted` if given, also when no area was found for it on the page."""
     doc = _open_pdf(input_path)
     redacted_areas = 0
 
     for page in doc:
+        text = page.get_text()
         words = page.get_text("words")
 
-        for pii in find_pii_strings(page.get_text(), languages, entities, threshold, allow_terms, deny_terms):
+        for pii, entity_type in find_pii_entity_types(text, languages, entities, threshold, allow_terms, deny_terms).items():
+            if redacted is not None:
+                redacted.append(RedactedString(pii, entity_type))
+
             for rect in _whole_word_hits(page, pii, words):
                 page.add_redact_annot(rect, fill=BLACK)
                 redacted_areas += 1

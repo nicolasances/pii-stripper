@@ -258,3 +258,37 @@ def test_cli_removes_bookmarks_by_default_and_keeps_them_with_keep_outline(tmp_p
     kept_doc = pymupdf.open(kept)
     assert removed_doc.get_toc() == []
     assert [entry[1] for entry in kept_doc.get_toc()] == [HIDDEN_PII["bookmark"]]
+
+
+def test_a_clean_run_exits_with_0_and_reports_no_residuals(tmp_path, capsys):
+    source = make_pdf(tmp_path / "in.pdf", [f"Write to {fake.email()} please"])
+
+    exit_code = main([str(source), "-o", str(tmp_path / "out.pdf")])
+
+    assert exit_code == 0
+    assert "not clean" not in capsys.readouterr().err
+
+
+def test_a_failed_redaction_exits_with_2_and_names_what_is_left_without_leaking_it(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr("pii_strip.redactor._whole_word_hits", lambda page, pii, words: [])
+    email = fake.email()
+    source = make_pdf(tmp_path / "in.pdf", ["Nothing here", f"Write to {email} please"])
+
+    exit_code = main([str(source), "-o", str(tmp_path / "out.pdf"), "--entities", "EMAIL_ADDRESS"])
+
+    err = capsys.readouterr().err
+    assert exit_code == 2
+    assert "not clean" in err
+    assert "EMAIL_ADDRESS on page 2" in err
+    assert email not in err
+
+
+def test_the_output_is_kept_when_verification_fails(tmp_path, monkeypatch):
+    monkeypatch.setattr("pii_strip.redactor._whole_word_hits", lambda page, pii, words: [])
+    source = make_pdf(tmp_path / "in.pdf", [f"Write to {fake.email()} please"])
+    output = tmp_path / "out.pdf"
+
+    exit_code = main([str(source), "-o", str(output), "--entities", "EMAIL_ADDRESS"])
+
+    assert exit_code == 2
+    assert output.exists()

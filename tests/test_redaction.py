@@ -172,7 +172,7 @@ def test_keeps_a_date_and_an_amount_written_with_eight_digits(tmp_path):
 
 
 def test_a_short_detected_string_is_not_redacted_inside_longer_words(tmp_path, monkeypatch):
-    monkeypatch.setattr("pii_strip.redactor.find_pii_strings", lambda text, languages=None, entities=None, *args: {"An"})
+    monkeypatch.setattr("pii_strip.redactor.find_pii_entity_types", lambda text, languages=None, entities=None, *args: {"An": "PERSON"})
     source = make_pdf(tmp_path / "in.pdf", ["UDVALGTE Anbefalinger: An Nguyen led the transformation and the organization."])
     output = tmp_path / "out.pdf"
 
@@ -185,7 +185,7 @@ def test_a_short_detected_string_is_not_redacted_inside_longer_words(tmp_path, m
 
 
 def test_a_short_detected_string_is_still_redacted_as_a_whole_word(tmp_path, monkeypatch):
-    monkeypatch.setattr("pii_strip.redactor.find_pii_strings", lambda text, languages=None, entities=None, *args: {"An"})
+    monkeypatch.setattr("pii_strip.redactor.find_pii_entity_types", lambda text, languages=None, entities=None, *args: {"An": "PERSON"})
     source = make_pdf(tmp_path / "in.pdf", ["Anbefalinger: An Nguyen led the work."])
     output = tmp_path / "out.pdf"
 
@@ -197,7 +197,7 @@ def test_a_short_detected_string_is_still_redacted_as_a_whole_word(tmp_path, mon
 
 
 def test_a_name_followed_by_a_possessive_or_punctuation_is_still_redacted(tmp_path, monkeypatch):
-    monkeypatch.setattr("pii_strip.redactor.find_pii_strings", lambda text, languages=None, entities=None, *args: {"Mette"})
+    monkeypatch.setattr("pii_strip.redactor.find_pii_entity_types", lambda text, languages=None, entities=None, *args: {"Mette": "PERSON"})
     source = make_pdf(tmp_path / "in.pdf", ["Mette, Mette's bil og (Mette) kom."])
     output = tmp_path / "out.pdf"
 
@@ -207,7 +207,7 @@ def test_a_name_followed_by_a_possessive_or_punctuation_is_still_redacted(tmp_pa
 
 
 def test_a_name_split_across_two_lines_is_still_redacted(tmp_path, monkeypatch):
-    monkeypatch.setattr("pii_strip.redactor.find_pii_strings", lambda text, languages=None, entities=None, *args: {"Mette Hansen"})
+    monkeypatch.setattr("pii_strip.redactor.find_pii_entity_types", lambda text, languages=None, entities=None, *args: {"Mette Hansen": "PERSON"})
     doc = pymupdf.open()
     page = doc.new_page()
     page.insert_text((72, 72), "Kontakt Mette", fontsize=11)
@@ -225,7 +225,7 @@ def test_a_name_split_across_two_lines_is_still_redacted(tmp_path, monkeypatch):
 
 
 def test_a_capitalised_detected_word_does_not_redact_the_same_word_in_lowercase(tmp_path, monkeypatch):
-    monkeypatch.setattr("pii_strip.redactor.find_pii_strings", lambda text, languages=None, entities=None, *args: {"With"})
+    monkeypatch.setattr("pii_strip.redactor.find_pii_entity_types", lambda text, languages=None, entities=None, *args: {"With": "PERSON"})
     source = make_pdf(tmp_path / "in.pdf", ["With care. He works with the team."])
     output = tmp_path / "out.pdf"
 
@@ -237,7 +237,7 @@ def test_a_capitalised_detected_word_does_not_redact_the_same_word_in_lowercase(
 
 
 def test_a_name_written_in_capitals_is_still_redacted(tmp_path, monkeypatch):
-    monkeypatch.setattr("pii_strip.redactor.find_pii_strings", lambda text, languages=None, entities=None, *args: {"Mette Hansen"})
+    monkeypatch.setattr("pii_strip.redactor.find_pii_entity_types", lambda text, languages=None, entities=None, *args: {"Mette Hansen": "PERSON"})
     source = make_pdf(tmp_path / "in.pdf", ["Signed: METTE HANSEN, today."])
     output = tmp_path / "out.pdf"
 
