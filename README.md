@@ -55,6 +55,7 @@ Pass a folder instead of a file to redact every PDF directly in it (`.pdf` in an
 - Each file's summary line and messages start with its file name. A last line counts the files per result.
 - The exit code is the most serious result over all files: `2`, then `1`, then `3`, then `0`.
 - Every other option applies to each file. Names found in one file are not looked for in the others.
+- With `--report`, one JSON file is written for the whole run (`schema_version` `2`), with one entry per PDF in `files`. A file that failed has its `error`. The report may be written inside `processed/`.
 
 | Flag | What it does |
 |---|---|

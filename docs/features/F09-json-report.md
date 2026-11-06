@@ -57,6 +57,7 @@ The report format is also the basis for a later interactive `scan` → edit → 
 | TD-08 | The report path may not be the input or output file; `--report-include-text` without `--report` is a usage error (exit `1`) | Avoids overwriting the PDF with JSON and silently ignored flags |
 | TD-09 | If the report can't be written, the exit code is `1`, or `2` if PII is left in the output | `2` ("don't share the output") is the more important signal |
 | TD-10 | An existing report file is overwritten, without `--force` | The report is a by-product of the run, not the user's document |
+| TD-11 | A folder run (F11) writes a different layout with `schema_version` `2`: the per-file content of this report becomes one entry per file in a `files` list | The single-file report stays at version `1`, so existing consumers keep working |
 
 ## 6. Success Criteria
 

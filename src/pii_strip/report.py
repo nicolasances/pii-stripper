@@ -12,6 +12,8 @@ from pii_strip.sanitize import SanitizeCounts
 from pii_strip.verify import Residual
 
 REPORT_SCHEMA_VERSION = 1
+# A different layout from the single-file report: the per-file content is in a 'files' list (F11)
+FOLDER_REPORT_SCHEMA_VERSION = 2
 
 
 def _plural(count: int, noun: str) -> str:
@@ -92,6 +94,33 @@ def build_report(input_path: Path, output_path: Path, started_at: datetime, conf
         "image_only_pages": image_only_pages,
         "sanitize": asdict(counts),
         "verification": {"status": "failed" if residuals else "ok", "residuals": [asdict(residual) for residual in residuals]},
+        "exit_code": exit_code,
+    }
+
+
+def build_file_entry(input_path: Path, output_path: Path, started_at: datetime, findings: list[Finding], image_only_pages: list[int], counts: SanitizeCounts, residuals: list[Residual], exit_code: int, error: str | None, include_text: bool = False) -> dict:
+    """The report entry for one file of a folder run: the same per-file content as the single-file report. A file that failed has its error and no verification result."""
+    return {
+        "input": str(input_path),
+        "output": str(output_path),
+        "started_at": started_at.isoformat(),
+        "findings": [_finding_entry(finding, include_text) for finding in findings],
+        "image_only_pages": image_only_pages,
+        "sanitize": asdict(counts),
+        "verification": None if error is not None else {"status": "failed" if residuals else "ok", "residuals": [asdict(residual) for residual in residuals]},
+        "exit_code": exit_code,
+        "error": error,
+    }
+
+
+def build_folder_report(folder: Path, output_folder: Path, started_at: datetime, configuration: dict, files: list[dict], exit_code: int) -> dict:
+    """The JSON report of a folder run (F11): the run, the configuration and the final exit code, and one entry per PDF (see build_file_entry)."""
+    return {
+        "schema_version": FOLDER_REPORT_SCHEMA_VERSION,
+        "tool": {"name": "pii-strip", "version": __version__},
+        "run": {"input": str(folder), "output": str(output_folder), "started_at": started_at.isoformat()},
+        "configuration": configuration,
+        "files": files,
         "exit_code": exit_code,
     }
 

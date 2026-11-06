@@ -1,8 +1,10 @@
+import json
 from pathlib import Path
 
 from faker import Faker
 
 from pii_strip.cli import main
+from pii_strip.report import FOLDER_REPORT_SCHEMA_VERSION
 from tests.support.pdf_factory import IMAGE_PAGE, extract_text, make_mixed_pdf, make_pdf
 
 fake = Faker("da_DK")
@@ -183,3 +185,55 @@ def test_quiet_keeps_the_final_line_when_a_file_failed(tmp_path, capsys):
     main([str(tmp_path), "--quiet"])
 
     assert "processed 2 files" in capsys.readouterr().err
+
+
+def test_a_folder_report_has_one_entry_per_file_and_no_matched_text(tmp_path):
+    email = fake.email()
+    make_pdf(tmp_path / "a.pdf", [f"Mail {email}"])
+    make_pdf(tmp_path / "b.pdf", ["Hello"])
+    report = tmp_path / "report.json"
+
+    exit_code = main([str(tmp_path), "--report", str(report), "--quiet"])
+
+    content = json.loads(report.read_text())
+    assert exit_code == 0
+    assert content["schema_version"] == FOLDER_REPORT_SCHEMA_VERSION
+    assert content["exit_code"] == 0
+    assert [(Path(entry["input"]).name, Path(entry["output"]).name, entry["exit_code"]) for entry in content["files"]] == [("a.pdf", "a-stripped.pdf", 0), ("b.pdf", "b-stripped.pdf", 0)]
+    assert [finding["entity_type"] for finding in content["files"][0]["findings"]] == ["EMAIL_ADDRESS"]
+    assert email not in report.read_text()
+
+
+def test_a_failed_file_is_in_the_folder_report_with_its_error(tmp_path):
+    _write_corrupt_pdf(tmp_path / "a.pdf")
+    make_pdf(tmp_path / "b.pdf", ["Hello"])
+    report = tmp_path / "report.json"
+
+    exit_code = main([str(tmp_path), "--report", str(report), "--quiet"])
+
+    first = json.loads(report.read_text())["files"][0]
+    assert exit_code == 1
+    assert (first["exit_code"], first["error"] is not None, first["verification"]) == (1, True, None)
+
+
+def test_the_folder_report_includes_the_text_only_when_asked(tmp_path, capsys):
+    email = fake.email()
+    make_pdf(tmp_path / "a.pdf", [f"Mail {email}"])
+    report = tmp_path / "processed" / "report.json"
+    report.parent.mkdir()
+
+    main([str(tmp_path), "--report", str(report), "--report-include-text", "--quiet"])
+
+    assert email in report.read_text()
+    assert "contains personal data" in capsys.readouterr().err
+
+
+def test_the_folder_report_may_not_be_an_input_pdf(tmp_path, capsys):
+    source = make_pdf(tmp_path / "a.pdf", ["Hello"])
+    before = source.read_bytes()
+
+    exit_code = main([str(tmp_path), "--report", str(source)])
+
+    assert exit_code == 1
+    assert source.read_bytes() == before
+    assert not (tmp_path / "processed").exists()

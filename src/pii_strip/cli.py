@@ -7,7 +7,7 @@ from pathlib import Path
 from pii_strip import __version__
 from pii_strip.nlp import DEFAULT_ENTITIES, ModelMissingError, SUPPORTED_ENTITIES, parse_entities, parse_languages, require_models, NER_ENTITIES
 from pii_strip.redactor import Finding, RedactedString, RedactionError, redact_pdf
-from pii_strip.report import build_report, summary_line, write_report
+from pii_strip.report import build_file_entry, build_folder_report, build_report, summary_line, write_report
 from pii_strip.sanitize import SanitizeCounts
 from pii_strip.term_lists import DEFAULT_THRESHOLD, parse_threshold, read_term_list
 from pii_strip.verify import verify_pdf
@@ -178,17 +178,36 @@ def _folder_summary(runs: list[FileRun]) -> str:
     return f"processed {len(runs)} {files}: {', '.join(parts)}"
 
 
+def _write_report(args: argparse.Namespace, report: dict, exit_code: int) -> int:
+    """Write the report and return the final exit code: 1 if the report can't be written, unless PII is left in an output (2)."""
+    try:
+        write_report(args.report, report)
+    except OSError as error:
+        _error(f"cannot write the report {args.report} ({error})")
+
+        return 2 if exit_code == 2 else 1
+
+    if args.report_include_text:
+        print(f"pii-strip: warning: the report {args.report} contains personal data (the matched text). Do not share it.", file=sys.stderr)
+
+    return exit_code
+
+
 def _main_folder(args: argparse.Namespace, options: Options) -> int:
     folder = args.input
+    started_at = datetime.now(timezone.utc)
     pdfs, skipped = _folder_inputs(folder)
+    processed = folder / PROCESSED_FOLDER
+    outputs = [processed / f"{pdf.stem}{OUTPUT_SUFFIX}" for pdf in pdfs]
 
     if not pdfs:
         return _error(f"no PDF files found in the folder {folder}")
 
+    if args.report and any(_same_file(args.report, path) for path in pdfs + outputs):
+        return _error("the report can't be written to an input or output file; choose a different report path")
+
     if skipped:
         print(f"pii-strip: warning: skipped (not a PDF, or a folder): {', '.join(entry.name for entry in skipped)}", file=sys.stderr)
-
-    processed = folder / PROCESSED_FOLDER
 
     try:
         processed.mkdir(exist_ok=True)
@@ -197,8 +216,7 @@ def _main_folder(args: argparse.Namespace, options: Options) -> int:
 
     runs = []
 
-    for pdf in pdfs:
-        output = processed / f"{pdf.stem}{OUTPUT_SUFFIX}"
+    for pdf, output in zip(pdfs, outputs):
         label = f"{pdf.name}: "
 
         if output.exists() and not args.force:
@@ -212,7 +230,13 @@ def _main_folder(args: argparse.Namespace, options: Options) -> int:
     if not args.quiet or exit_code != 0:
         print(_folder_summary(runs), file=sys.stderr)
 
-    return exit_code
+    if not args.report:
+        return exit_code
+
+    configuration = _configuration(args, options.languages, options.entities, options.threshold)
+    files = [build_file_entry(run.input, run.output, run.started_at, run.findings, run.image_only_pages, run.counts, run.residuals, run.exit_code, run.error, args.report_include_text) for run in runs]
+
+    return _write_report(args, build_folder_report(folder, processed, started_at, configuration, files, exit_code), exit_code)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -233,9 +257,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.report_include_text and not args.report:
         return _error("--report-include-text needs --report")
-
-    if is_folder and args.report:
-        return _error("--report is not supported with a folder yet")
 
     if not is_folder:
         if _same_file(args.input, args.output):
@@ -263,17 +284,7 @@ def main(argv: list[str] | None = None) -> int:
     configuration = _configuration(args, options.languages, options.entities, options.threshold)
     report = build_report(args.input, args.output, run.started_at, configuration, run.findings, run.image_only_pages, run.counts, run.residuals, run.exit_code, args.report_include_text)
 
-    try:
-        write_report(args.report, report)
-    except OSError as error:
-        _error(f"cannot write the report {args.report} ({error})")
-
-        return 2 if run.exit_code == 2 else 1
-
-    if args.report_include_text:
-        print(f"pii-strip: warning: the report {args.report} contains personal data (the matched text). Do not share it.", file=sys.stderr)
-
-    return run.exit_code
+    return _write_report(args, report, run.exit_code)
 
 
 if __name__ == "__main__":
