@@ -75,4 +75,4 @@ This replaces the shell loop (`for f in *.pdf; ...`) suggested in `docs/idea.md`
 
 | # | Question | Notes |
 |---|----------|-------|
-| OQ-01 | Should the report be allowed inside `processed/`? | Probably yes; it isn't a PDF and doesn't affect later runs |
+| OQ-01 | Should the report be allowed inside `processed/`? | **Resolved:** yes. It isn't a PDF, so a later run never picks it up; only the input and output PDFs are forbidden as the report path |
