@@ -178,3 +178,32 @@ def test_entities_flag_restricts_what_is_redacted(tmp_path):
     text = extract_text(output)
     assert "mary@example.com" not in text
     assert "Mary Johnson" in text
+
+
+def test_a_missing_deny_file_exits_with_1_and_names_the_file(tmp_path, capsys):
+    source = make_pdf(tmp_path / "in.pdf", ["Hello"])
+
+    exit_code = main([str(source), "-o", str(tmp_path / "out.pdf"), "--deny", str(tmp_path / "nope.txt")])
+
+    assert exit_code == 1
+    assert "nope.txt" in capsys.readouterr().err
+    assert not (tmp_path / "out.pdf").exists()
+
+
+def test_a_missing_allow_file_exits_with_1_and_names_the_file(tmp_path, capsys):
+    source = make_pdf(tmp_path / "in.pdf", ["Hello"])
+
+    exit_code = main([str(source), "-o", str(tmp_path / "out.pdf"), "--allow", str(tmp_path / "nope.txt")])
+
+    assert exit_code == 1
+    assert "nope.txt" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("threshold", ["1.5", "-1", "high"])
+def test_an_invalid_threshold_exits_with_1(tmp_path, capsys, threshold):
+    source = make_pdf(tmp_path / "in.pdf", ["Hello"])
+
+    exit_code = main([str(source), "-o", str(tmp_path / "out.pdf"), "--threshold", threshold])
+
+    assert exit_code == 1
+    assert "threshold" in capsys.readouterr().err.lower()
