@@ -237,3 +237,17 @@ def test_the_folder_report_may_not_be_an_input_pdf(tmp_path, capsys):
     assert exit_code == 1
     assert source.read_bytes() == before
     assert not (tmp_path / "processed").exists()
+
+
+def test_names_found_in_one_file_are_not_redacted_in_another(tmp_path, monkeypatch):
+    # Simulate the model missing the surname in b.pdf, as it does in a short footer
+    from pii_strip import redactor
+    real_find = redactor.find_distinct_pii_results
+    monkeypatch.setattr(redactor, "find_distinct_pii_results", lambda text, *args: {} if "Side 2" in text else real_find(text, *args))
+    make_pdf(tmp_path / "a.pdf", ["Mette Jensen skrev rapporten om budgettet."])
+    make_pdf(tmp_path / "b.pdf", ["Budgettet er godkendt. Side 2 · Jensen"])
+
+    main([str(tmp_path), "--quiet"])
+
+    assert "Jensen" not in extract_text(tmp_path / "processed" / "a-stripped.pdf")
+    assert "Side 2 · Jensen" in extract_text(tmp_path / "processed" / "b-stripped.pdf")
