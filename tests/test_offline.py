@@ -53,11 +53,12 @@ def test_the_network_block_catches_a_connection_attempt(no_network):
 
 
 def test_the_full_pipeline_runs_with_the_network_blocked(tmp_path, no_network):
-    name, email, place = fake.name(), fake.email(), "Aarhus"
+    # Fixed synthetic values: this test is about the network, so its outcome must not depend on which fake name is drawn.
+    name, email, place = "Mette Jensen", "mette.jensen@example.com", "Aarhus"
     deny, allow = tmp_path / "deny.txt", tmp_path / "allow.txt"
     deny.write_text("Projekt Solsort\n")
     allow.write_text("Danmarks Radio\n")
-    source = make_pdf(tmp_path / "in.pdf", [f"{name} bor i {place}. Mail {email}, tlf 20 12 34 56, CPR 010190-1234.", "Projekt Solsort hos Danmarks Radio."])
+    source = make_pdf(tmp_path / "in.pdf", [f"{name} bor i {place}. Skriv til {email} eller ring på 20 12 34 56. Hendes CPR-nummer er 010190-1234.", "Projekt Solsort hos Danmarks Radio."])
     output, report = tmp_path / "out.pdf", tmp_path / "report.json"
 
     exit_code = main([str(source), "-o", str(output), "--lang", "da,en", "--entities", ",".join(nlp.SUPPORTED_ENTITIES), "--deny", str(deny), "--allow", str(allow), "--report", str(report), "--quiet"])
