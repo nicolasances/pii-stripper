@@ -1,3 +1,4 @@
+import re
 from functools import lru_cache
 from typing import Callable
 
@@ -8,8 +9,8 @@ from presidio_analyzer.predefined_recognizers import SpacyRecognizer
 
 SUPPORTED_LANGUAGES = ["da", "en"]
 MODELS = {"da": "da_core_news_md", "en": "en_core_web_md"}
-SUPPORTED_ENTITIES = ["PERSON", "LOCATION", "EMAIL_ADDRESS", "DK_CPR", "DK_PHONE"]
-DEFAULT_ENTITIES = ["PERSON", "EMAIL_ADDRESS", "DK_CPR", "DK_PHONE"]
+SUPPORTED_ENTITIES = ["PERSON", "LOCATION", "EMAIL_ADDRESS", "DK_CPR", "DK_PHONE", "SOCIAL_PROFILE"]
+DEFAULT_ENTITIES = ["PERSON", "EMAIL_ADDRESS", "DK_CPR", "DK_PHONE", "SOCIAL_PROFILE"]
 NER_ENTITIES = ["PERSON", "LOCATION"]
 # The Danish model labels people PER and places LOC; the English model uses PERSON, GPE and LOC. Organizations are kept only to veto mislabelled people and places; every other label is ignored.
 ORGANIZATION = "ORGANIZATION"
@@ -59,6 +60,57 @@ def require_models(languages: list[str], is_installed: Callable[[str], bool] | N
 def is_plausible_name(span: str) -> bool:
     """The NER models also tag labels and amounts in short snippets (e.g. 'tlf', 'Nummer 0101901234'). A name or place has no digit and starts with an uppercase letter."""
     return span[:1].isupper() and not any(character.isdigit() for character in span)
+
+
+MIN_NAME_PART_LENGTH = 3
+# Words the NER models include in a name span that are not part of the name: salutations, titles, letter openings (F04 recall check) and job titles, e.g. 'Ryan Mendez Head' for 'Ryan Mendez Head of Innovation'
+NOT_NAME_WORDS = {
+    "kære", "hej", "hi", "hello", "dear", "mr", "mrs", "ms", "miss", "dr", "hr", "fru", "frk", "prof", "sir", "madam", "vedr", "att",
+    "head", "chief", "director", "manager", "lead", "senior", "junior", "principal", "officer", "president", "vice", "editor", "producer", "consultant", "engineer", "developer", "specialist", "coordinator", "advisor", "founder", "partner",
+    "ceo", "cto", "cfo", "coo", "cio", "vp",
+    "chef", "direktør", "leder", "redaktør", "chefredaktør", "konsulent", "udvikler", "projektleder", "afdelingsleder", "medarbejder", "journalist", "vært",
+}
+
+
+def _is_name_part(word: str) -> bool:
+    """A part of a name that can identify the person on its own: capitalized, at least 3 letters (hyphens allowed), and not a salutation or title. Initials such as 'M.' are not parts."""
+    return len(word) >= MIN_NAME_PART_LENGTH and word[:1].isupper() and word.replace("-", "").isalpha() and word.casefold() not in NOT_NAME_WORDS
+
+
+def known_name_terms(names: list[str], allow_terms: list[str] | None = None) -> set[str]:
+    """The terms to redact everywhere in a document for the names found in it: each full name and its name parts (e.g. the first name and the surname). An allowed term, and a one-word name that is a salutation or title, is left out."""
+    allowed = {term.casefold() for term in allow_terms or []}
+    terms = {name for name in names if name.casefold() not in NOT_NAME_WORDS} | {word for name in names for word in name.split() if _is_name_part(word)}
+
+    return {term for term in terms if term.casefold() not in allowed}
+
+
+def _is_not_name_word(word: str) -> bool:
+    return word.strip(".,:;()").casefold() in NOT_NAME_WORDS
+
+
+def trim_non_name_words(text: str, results: list[RecognizerResult]) -> list[RecognizerResult]:
+    """Cut salutations and job titles off the start and end of every PERSON span ('Kære Mette Hansen' becomes 'Mette Hansen', 'Ryan Mendez Head' becomes 'Ryan Mendez').
+    A span with nothing left is dropped. Other entity types are kept as they are."""
+    trimmed = []
+
+    for result in results:
+        if result.entity_type != "PERSON":
+            trimmed.append(result)
+            continue
+
+        words = list(re.finditer(r"\S+", text[result.start:result.end]))
+
+        while words and _is_not_name_word(words[0].group()):
+            words.pop(0)
+
+        while words and _is_not_name_word(words[-1].group()):
+            words.pop()
+
+        if words:
+            trimmed.append(RecognizerResult(result.entity_type, result.start + words[0].start(), result.start + words[-1].end(), result.score, recognition_metadata=result.recognition_metadata))
+
+    return trimmed
 
 
 MIN_ORGANIZATION_OVERLAP = 0.6
@@ -128,6 +180,6 @@ def find_named_entities(text: str, languages: list[str], entities: list[str]) ->
     analyzer = build_analyzer(tuple(languages))
     results = [_with_language(result, language) for language in languages for result in analyzer.analyze(text, language=language, entities=wanted + [ORGANIZATION])]
 
-    plausible = [result for result in results if result.entity_type == ORGANIZATION or is_plausible_name(text[result.start:result.end])]
+    plausible = [result for result in trim_non_name_words(text, results) if result.entity_type == ORGANIZATION or is_plausible_name(text[result.start:result.end])]
 
     return without_organizations(merge_results(plausible))

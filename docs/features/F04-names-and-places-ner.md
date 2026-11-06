@@ -51,6 +51,11 @@ This feature carries the **project's biggest risk**: whether Danish NER finds en
 | TD-02 | Pin the model packages as project dependencies | Reproducible installs and no download at runtime (offline guarantee, F10) |
 | TD-03 | Run every language and merge, instead of detecting the document's language | Mixed-language documents are common; language detection per paragraph adds error. It costs roughly double the processing time, which is acceptable for ad hoc use |
 | TD-04 | Recall check as a developer script, not a CLI command | It's an evaluation tool for the developer, not a user feature |
+| TD-05 | Names are known document-wide (#21): every page is analyzed first, then each full `PERSON` name and its name parts are redacted on every page where they occur | The model often misses a name in a short snippet with no context, e.g. a surname alone in a footer. Knowingly over-redacts a common surname that belongs to someone else; the allow list is the remedy |
+| TD-06 | A name part is a word of the name span that is capitalized, has at least 3 letters (hyphens allowed) and is not a salutation or title (`Kære`, `Dear`, `Hr`, `Vedr` …). A one-word name that is a salutation or title is not spread either | The model includes salutations and sentence starts in name spans (see the recall check notes), which must not be blacked out on every page. Initials are too short to identify anyone |
+| TD-09 | Salutations and job titles (`Kære`, `Dear`, `Head`, `Chief`, `Direktør`, `Chef` …, one list in `nlp.NOT_NAME_WORDS`) are cut off the start and end of every `PERSON` span, and are never name parts | The model stretches a name over a following title without a comma: `Ryan Mendez Head of Innovation` is tagged `Ryan Mendez Head`. Without trimming, `Head` was blacked out there and, with TD-05, on every page. Recall on the recall check is unchanged |
+| TD-07 | A known name is only redacted in the same case or in capitals, like every other redaction | Many Danish surnames are ordinary words (`Skov`, `Lund`, `Holm`); case-insensitive matching would black out `skov` everywhere |
+| TD-08 | Known-name hits are `PERSON` findings with the source `known_name`, only where no other finding already covers the area | Tells propagated hits apart from the model's own in the report (F09), without counting the same area twice |
 
 ## 6. Success Criteria
 
@@ -89,7 +94,9 @@ This feature carries the **project's biggest risk**: whether Danish NER finds en
 - The recall check counts a name as found when a same-type finding contains it, and a finding as correct when it overlaps an expected one of the same type.
 - A 10-page synthetic document took under 1 second (short pages, models already installed), well inside the SC-06 budget. Not measured on dense real pages.
 
-**`LOCATION` default (OQ-02):** off. Enable it with `--entities PERSON,LOCATION,...`. The default entity set is `PERSON`, `EMAIL_ADDRESS`, `DK_CPR` and `DK_PHONE`.
+**`LOCATION` default (OQ-02):** off. Enable it with `--entities PERSON,LOCATION,...`. The default entity set is `PERSON`, `EMAIL_ADDRESS`, `DK_CPR`, `DK_PHONE` and `SOCIAL_PROFILE`.
+
+**`SOCIAL_PROFILE` (#21):** a pattern entity type, on by default, for profile URLs on LinkedIn (`linkedin.com/in/…`), Facebook, Instagram, X/Twitter, GitHub and TikTok (`tiktok.com/@…`), with or without the scheme and a `www.` or two-letter subdomain. The whole URL is redacted, not only the profile name. A platform without a profile and a LinkedIn company page are not matched. Bare `@handles` and other platforms are not detected.
 
 **Design notes:**
 - `nlp.build_analyzer` creates a Presidio `AnalyzerEngine` with an explicit `SpacyNlpEngine` (one model per requested language) and one `SpacyRecognizer` per language. Danish labels `PER` and `LOC` and English `GPE` map to `PERSON` and `LOCATION`; every other label is ignored.

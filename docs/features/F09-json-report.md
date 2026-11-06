@@ -33,7 +33,7 @@ The report format is also the basis for a later interactive `scan` → edit → 
 - **Report contents:**
   - tool version, input and output paths, time of the run
   - effective configuration (languages, entities, threshold, deny and allow file paths, not their contents)
-  - findings: entity type, page, score, language, source (NER, pattern, deny list), page areas, and a **SHA-256 hash of the matched text**
+  - findings: entity type, page, score, language, source (NER, pattern, deny list, known name), page areas, and a **SHA-256 hash of the matched text**
   - image-only pages (F08)
   - sanitize actions and counts (F06)
   - verification result and residuals, with the same text rules as findings (F07)
@@ -51,7 +51,7 @@ The report format is also the basis for a later interactive `scan` → edit → 
 | TD-02 | Unsalted hash, except for CPR numbers, which get `"sha256": null` | Lets a developer check "was X redacted?". CPR numbers have a small value space and could be brute-forced from a hash (OQ-01) |
 | TD-03 | Summary on stderr, not stdout | Leaves stdout free for future machine-readable output |
 | TD-04 | `redact_pdf` fills an optional `findings` list with one `Finding` per distinct string per page (entity type, page, score, language, source, areas) | Same out-parameter pattern as `counts` (F06), `redacted` (F07) and `image_only_pages` (F08) |
-| TD-05 | Source is `ner`, `pattern` or `deny_list`; language is the model that found a name, `null` for patterns and the deny list | NER results are tagged with their language before the cross-language merge, so the kept result keeps its language |
+| TD-05 | Source is `ner`, `pattern`, `deny_list` or `known_name` (a name found as `PERSON` on another page or elsewhere on the same page, F04 TD-05); language is the model that found a name, `null` for patterns and the deny list | NER results are tagged with their language before the cross-language merge, so the kept result keeps its language |
 | TD-06 | The summary counts redacted areas, not distinct strings, and the pages that have at least one area | A string found but missed by the redaction search is reported by the verification instead |
 | TD-07 | Residuals in the report have only the entity type and page | `Residual` never held text (F07), so it can't leak, even with `--report-include-text` |
 | TD-08 | The report path may not be the input or output file; `--report-include-text` without `--report` is a usage error (exit `1`) | Avoids overwriting the PDF with JSON and silently ignored flags |

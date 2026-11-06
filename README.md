@@ -1,6 +1,6 @@
 # pii-strip
 
-`pii-strip` removes personal data (names, email addresses, Danish CPR and phone numbers, and optionally places) from a PDF. It does a true redaction: the text is removed from the file and a black box is drawn in its place. Metadata, comments, form values, attachments and bookmarks are cleaned too.
+`pii-strip` removes personal data (names, email addresses, Danish CPR and phone numbers, social profile URLs, and optionally places) from a PDF. It does a true redaction: the text is removed from the file and a black box is drawn in its place. Metadata, comments, form values, attachments and bookmarks are cleaned too.
 
 > **Assistive, not a guarantee.** No detector finds all personal data. Always review the output before you share it.
 
@@ -49,7 +49,7 @@ A summary line is printed on stderr after each run.
 | `-o`, `--output PATH` | Where to write the redacted PDF. Required. It can't be the input file. |
 | `--force` | Overwrite the output file if it already exists. |
 | `--lang da,en` | Languages to analyze with, comma-separated. Default: `da,en` (every page is analyzed in both). |
-| `--entities LIST` | Entity types to detect, comma-separated. Default: `PERSON,EMAIL_ADDRESS,DK_CPR,DK_PHONE`. Supported: `PERSON`, `LOCATION`, `EMAIL_ADDRESS`, `DK_CPR`, `DK_PHONE`. |
+| `--entities LIST` | Entity types to detect, comma-separated. Default: `PERSON,EMAIL_ADDRESS,DK_CPR,DK_PHONE,SOCIAL_PROFILE`. Supported: `PERSON`, `LOCATION`, `EMAIL_ADDRESS`, `DK_CPR`, `DK_PHONE`, `SOCIAL_PROFILE`. `SOCIAL_PROFILE` is a profile URL on LinkedIn (`linkedin.com/in/…`), Facebook, Instagram, X/Twitter, GitHub or TikTok; the whole URL is redacted. |
 | `--deny FILE` | A text file with one term per line that is always redacted. |
 | `--allow FILE` | A text file with one term per line that is never redacted. A term in both lists is redacted. |
 | `--threshold 0.5` | Minimum score, from 0 to 1, for a finding to be redacted. Default: `0.5`. |
@@ -64,14 +64,14 @@ A summary line is printed on stderr after each run.
 Examples:
 
 ```bash
-# Default: names, emails, CPR and phone numbers, Danish and English
+# Default: names, emails, CPR and phone numbers, social profile URLs, Danish and English
 pii-strip interview.pdf -o interview-redacted.pdf
 
 # English only, overwrite an existing output
 pii-strip notes.pdf -o notes-redacted.pdf --lang en --force
 
 # Also redact places, plus a project code name; never redact the company name
-pii-strip case.pdf -o case-redacted.pdf --entities PERSON,LOCATION,EMAIL_ADDRESS,DK_CPR,DK_PHONE --deny deny.txt --allow allow.txt
+pii-strip case.pdf -o case-redacted.pdf --entities PERSON,LOCATION,EMAIL_ADDRESS,DK_CPR,DK_PHONE,SOCIAL_PROFILE --deny deny.txt --allow allow.txt
 
 # Redact more aggressively
 pii-strip case.pdf -o case-redacted.pdf --threshold 0.3
@@ -101,6 +101,7 @@ pii-strip case.pdf -o case-redacted.pdf --report run.json --report-include-text
 - **Strings split across lines.** A name, email or number broken over two lines may be missed.
 - **Danish addresses.** Street addresses (e.g. "Emil Holms Kanal 20, 2300 København S") are not detected. `LOCATION` catches cities and places, not addresses.
 - **Names the NER model misses.** Unusual names, names in all caps and names in tables may be missed. Common words at the start of a sentence are sometimes redacted as names. Use `--deny` and `--allow` to correct this.
+- **Names are redacted everywhere in the document.** Once a name is found on any page, the full name, the first name and the surname are redacted on every page, e.g. a surname alone in a footer. This knowingly over-redacts: a common surname such as `Hansen` is blacked out also where it belongs to someone else. Put such a word in the `--allow` file to keep it. A name part is only redacted in the same case or in capitals, so a surname that is also an ordinary word (`Skov`) is not removed in lowercase text (`skov`). Initials and inflected forms (`Jensens`) are not matched. Salutations and common job titles (`Kære`, `Dear`, `Head`, `Chief`, `Direktør` …) are cut off a name, so `Ryan Mendez Head of Innovation` only redacts `Ryan Mendez`; a title not on that list may still be redacted with the name.
 - **Text in images, vector drawings or unusual font encodings** is not seen.
 
 ## Test data

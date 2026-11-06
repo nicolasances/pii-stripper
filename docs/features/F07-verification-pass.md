@@ -46,6 +46,7 @@ This turns "I hope it worked" into something a developer and a script can rely o
 | TD-04 | The residual-string check is case-insensitive and whole-word, and whitespace inside a string also matches a line break | Same matching as the redaction and the deny list, so `An` isn't reported inside `Anbefalinger`. Note: a detected word such as `With` is only redacted where its case matches, so a lowercase `with` elsewhere is reported as a residual. This errs on the safe side |
 | TD-05 | `redact_pdf` fills an optional `redacted` list with every detected string and its entity type (`RedactedString`), also when no area was found on the page. Verification lives in `verify.py` and the CLI calls it after saving | Same pattern as `counts` in F06. Recording detected strings, not redacted areas, is what lets verification catch strings the search missed |
 | TD-06 | Residuals are reported once per entity type and page | A list of `PERSON on page 2` lines is enough to know where to look |
+| TD-07 | Known names and their parts (F04 TD-05) are added to the redacted strings with `exact_case`, and are only reported in the same case or in capitals | They are redacted with that rule, so a lowercase `skov` for the surname `Skov` must not fail the run |
 
 ## 6. Success Criteria
 
