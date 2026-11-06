@@ -32,6 +32,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--allow", type=Path, help="a text file with one term per line that is never redacted (a term in both lists is redacted)")
     parser.add_argument("--threshold", help=f"minimum score, from 0 to 1, for a finding to be redacted (default: {DEFAULT_THRESHOLD})")
     parser.add_argument("--keep-outline", action="store_true", help="keep the bookmarks (outline); they are removed by default because their titles can contain names")
+    parser.add_argument("--allow-image-pages", action="store_true", help="accept pages that are only an image (e.g. scanned): they can't be checked or redacted; they are still listed in a warning, but the exit code is not 3")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
     return parser
@@ -77,15 +78,20 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     redacted: list[RedactedString] = []
+    image_only_pages: list[int] = []
 
     try:
-        redacted_areas = redact_pdf(args.input, args.output, languages, entities, threshold, allow_terms, deny_terms, args.keep_outline, redacted=redacted)
+        redacted_areas = redact_pdf(args.input, args.output, languages, entities, threshold, allow_terms, deny_terms, args.keep_outline, redacted=redacted, image_only_pages=image_only_pages)
     except RedactionError as error:
         print(f"pii-strip: error: {error}", file=sys.stderr)
 
         return 1
 
     print(f"redacted {redacted_areas} item(s)", file=sys.stderr)
+
+    if image_only_pages:
+        pages = ", ".join(str(number) for number in image_only_pages)
+        print(f"pii-strip: warning: image-only page(s) found, e.g. scanned pages. They were not checked or redacted and may contain personal data: page {pages}", file=sys.stderr)
 
     residuals = verify_pdf(args.output, redacted, languages, entities, threshold, allow_terms, deny_terms)
 
@@ -96,6 +102,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {residual.entity_type} on page {residual.page}", file=sys.stderr)
 
         return 2
+
+    if image_only_pages and not args.allow_image_pages:
+        return 3
 
     return 0
 

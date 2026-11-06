@@ -77,16 +77,25 @@ def _whole_word_hits(page: pymupdf.Page, pii: str, words: list) -> list[pymupdf.
     return hits
 
 
-def redact_pdf(input_path: Path, output_path: Path, languages: list[str] | None = None, entities: list[str] | None = None, threshold: float = DEFAULT_THRESHOLD, allow_terms: list[str] | None = None, deny_terms: list[str] | None = None, keep_outline: bool = False, counts: SanitizeCounts | None = None, redacted: list[RedactedString] | None = None) -> int:
+def _is_image_only(page: pymupdf.Page, text: str) -> bool:
+    """No extractable text and at least one image, typically a scanned page. A blank page is not image-only."""
+    return not text.strip() and len(page.get_images()) > 0
+
+
+def redact_pdf(input_path: Path, output_path: Path, languages: list[str] | None = None, entities: list[str] | None = None, threshold: float = DEFAULT_THRESHOLD, allow_terms: list[str] | None = None, deny_terms: list[str] | None = None, keep_outline: bool = False, counts: SanitizeCounts | None = None, redacted: list[RedactedString] | None = None, image_only_pages: list[int] | None = None) -> int:
     """Write a copy of the input PDF with detected PII truly removed (not just covered). Returns the number of redacted areas.
     Hidden content (metadata, XMP, annotations, form fields, embedded files, and bookmarks unless keep_outline is set) is always removed; the counts of what was removed are written to `counts` if given.
-    Every string detected as PII is appended to `redacted` if given, also when no area was found for it on the page."""
+    Every string detected as PII is appended to `redacted` if given, also when no area was found for it on the page.
+    The number (from 1) of every page that has no text but an image, and so can't be checked, is appended to `image_only_pages` if given. Those pages are passed through unchanged."""
     doc = _open_pdf(input_path)
     redacted_areas = 0
 
-    for page in doc:
+    for number, page in enumerate(doc, start=1):
         text = page.get_text()
         words = page.get_text("words")
+
+        if image_only_pages is not None and _is_image_only(page, text):
+            image_only_pages.append(number)
 
         for pii, entity_type in find_pii_entity_types(text, languages, entities, threshold, allow_terms, deny_terms).items():
             if redacted is not None:
