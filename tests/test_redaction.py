@@ -1,6 +1,7 @@
 import pymupdf
 import pytest
 from faker import Faker
+from presidio_analyzer import RecognizerResult
 
 from pii_strip.redactor import redact_pdf
 from tests.support.pdf_factory import EMPTY_PAGE, IMAGE_PAGE, extract_text, make_mixed_pdf, make_pdf, page_count
@@ -172,7 +173,7 @@ def test_keeps_a_date_and_an_amount_written_with_eight_digits(tmp_path):
 
 
 def test_a_short_detected_string_is_not_redacted_inside_longer_words(tmp_path, monkeypatch):
-    monkeypatch.setattr("pii_strip.redactor.find_pii_entity_types", lambda text, languages=None, entities=None, *args: {"An": "PERSON"})
+    monkeypatch.setattr("pii_strip.redactor.find_distinct_pii_results", lambda text, languages=None, entities=None, *args: {"An": RecognizerResult("PERSON", 0, 0, 0.85)})
     source = make_pdf(tmp_path / "in.pdf", ["UDVALGTE Anbefalinger: An Nguyen led the transformation and the organization."])
     output = tmp_path / "out.pdf"
 
@@ -185,7 +186,7 @@ def test_a_short_detected_string_is_not_redacted_inside_longer_words(tmp_path, m
 
 
 def test_a_short_detected_string_is_still_redacted_as_a_whole_word(tmp_path, monkeypatch):
-    monkeypatch.setattr("pii_strip.redactor.find_pii_entity_types", lambda text, languages=None, entities=None, *args: {"An": "PERSON"})
+    monkeypatch.setattr("pii_strip.redactor.find_distinct_pii_results", lambda text, languages=None, entities=None, *args: {"An": RecognizerResult("PERSON", 0, 0, 0.85)})
     source = make_pdf(tmp_path / "in.pdf", ["Anbefalinger: An Nguyen led the work."])
     output = tmp_path / "out.pdf"
 
@@ -197,7 +198,7 @@ def test_a_short_detected_string_is_still_redacted_as_a_whole_word(tmp_path, mon
 
 
 def test_a_name_followed_by_a_possessive_or_punctuation_is_still_redacted(tmp_path, monkeypatch):
-    monkeypatch.setattr("pii_strip.redactor.find_pii_entity_types", lambda text, languages=None, entities=None, *args: {"Mette": "PERSON"})
+    monkeypatch.setattr("pii_strip.redactor.find_distinct_pii_results", lambda text, languages=None, entities=None, *args: {"Mette": RecognizerResult("PERSON", 0, 0, 0.85)})
     source = make_pdf(tmp_path / "in.pdf", ["Mette, Mette's bil og (Mette) kom."])
     output = tmp_path / "out.pdf"
 
@@ -207,7 +208,7 @@ def test_a_name_followed_by_a_possessive_or_punctuation_is_still_redacted(tmp_pa
 
 
 def test_a_name_split_across_two_lines_is_still_redacted(tmp_path, monkeypatch):
-    monkeypatch.setattr("pii_strip.redactor.find_pii_entity_types", lambda text, languages=None, entities=None, *args: {"Mette Hansen": "PERSON"})
+    monkeypatch.setattr("pii_strip.redactor.find_distinct_pii_results", lambda text, languages=None, entities=None, *args: {"Mette Hansen": RecognizerResult("PERSON", 0, 0, 0.85)})
     doc = pymupdf.open()
     page = doc.new_page()
     page.insert_text((72, 72), "Kontakt Mette", fontsize=11)
@@ -225,7 +226,7 @@ def test_a_name_split_across_two_lines_is_still_redacted(tmp_path, monkeypatch):
 
 
 def test_a_capitalised_detected_word_does_not_redact_the_same_word_in_lowercase(tmp_path, monkeypatch):
-    monkeypatch.setattr("pii_strip.redactor.find_pii_entity_types", lambda text, languages=None, entities=None, *args: {"With": "PERSON"})
+    monkeypatch.setattr("pii_strip.redactor.find_distinct_pii_results", lambda text, languages=None, entities=None, *args: {"With": RecognizerResult("PERSON", 0, 0, 0.85)})
     source = make_pdf(tmp_path / "in.pdf", ["With care. He works with the team."])
     output = tmp_path / "out.pdf"
 
@@ -237,7 +238,7 @@ def test_a_capitalised_detected_word_does_not_redact_the_same_word_in_lowercase(
 
 
 def test_a_name_written_in_capitals_is_still_redacted(tmp_path, monkeypatch):
-    monkeypatch.setattr("pii_strip.redactor.find_pii_entity_types", lambda text, languages=None, entities=None, *args: {"Mette Hansen": "PERSON"})
+    monkeypatch.setattr("pii_strip.redactor.find_distinct_pii_results", lambda text, languages=None, entities=None, *args: {"Mette Hansen": RecognizerResult("PERSON", 0, 0, 0.85)})
     source = make_pdf(tmp_path / "in.pdf", ["Signed: METTE HANSEN, today."])
     output = tmp_path / "out.pdf"
 
@@ -371,3 +372,36 @@ def test_text_pages_are_still_redacted_next_to_an_image_only_page(tmp_path):
 
     assert email not in extract_text(output)
     assert "Write to" in extract_text(output)
+
+
+def test_findings_list_each_redacted_string_with_its_page_source_and_areas(tmp_path):
+    email = fake.email()
+    source = make_pdf(tmp_path / "in.pdf", ["Nothing here", f"Mail {email} or {email}"])
+    findings = []
+
+    redact_pdf(source, tmp_path / "out.pdf", entities=["EMAIL_ADDRESS"], findings=findings)
+
+    assert len(findings) == 1
+    assert (findings[0].text, findings[0].entity_type, findings[0].page, findings[0].source, findings[0].language) == (email, "EMAIL_ADDRESS", 2, "pattern", None)
+    assert findings[0].score > 0
+    assert len(findings[0].areas) == 2
+
+
+def test_a_name_finding_has_the_ner_source_and_a_language(tmp_path):
+    source = make_pdf(tmp_path / "in.pdf", ["The report was written by Margaret Thompson last week."])
+    findings = []
+
+    redact_pdf(source, tmp_path / "out.pdf", entities=["PERSON"], findings=findings)
+
+    person = next(finding for finding in findings if finding.entity_type == "PERSON")
+    assert person.source == "ner"
+    assert person.language in ("da", "en")
+
+
+def test_a_deny_term_finding_has_the_deny_list_source(tmp_path):
+    source = make_pdf(tmp_path / "in.pdf", ["Project Bluebird starts today"])
+    findings = []
+
+    redact_pdf(source, tmp_path / "out.pdf", entities=["EMAIL_ADDRESS"], deny_terms=["Bluebird"], findings=findings)
+
+    assert [(finding.entity_type, finding.source) for finding in findings] == [("DENY_LIST", "deny_list")]

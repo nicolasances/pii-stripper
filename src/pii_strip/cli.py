@@ -4,7 +4,9 @@ from pathlib import Path
 
 from pii_strip import __version__
 from pii_strip.nlp import ModelMissingError, SUPPORTED_ENTITIES, parse_entities, parse_languages, require_models, NER_ENTITIES
-from pii_strip.redactor import RedactedString, RedactionError, redact_pdf
+from pii_strip.redactor import Finding, RedactedString, RedactionError, redact_pdf
+from pii_strip.report import summary_line
+from pii_strip.sanitize import SanitizeCounts
 from pii_strip.term_lists import DEFAULT_THRESHOLD, parse_threshold, read_term_list
 from pii_strip.verify import verify_pdf
 
@@ -33,6 +35,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--threshold", help=f"minimum score, from 0 to 1, for a finding to be redacted (default: {DEFAULT_THRESHOLD})")
     parser.add_argument("--keep-outline", action="store_true", help="keep the bookmarks (outline); they are removed by default because their titles can contain names")
     parser.add_argument("--allow-image-pages", action="store_true", help="accept pages that are only an image (e.g. scanned): they can't be checked or redacted; they are still listed in a warning, but the exit code is not 3")
+    parser.add_argument("--quiet", action="store_true", help="don't print the summary line; warnings and errors are still printed")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
     return parser
@@ -79,21 +82,24 @@ def main(argv: list[str] | None = None) -> int:
 
     redacted: list[RedactedString] = []
     image_only_pages: list[int] = []
+    findings: list[Finding] = []
+    counts = SanitizeCounts()
 
     try:
-        redacted_areas = redact_pdf(args.input, args.output, languages, entities, threshold, allow_terms, deny_terms, args.keep_outline, redacted=redacted, image_only_pages=image_only_pages)
+        redact_pdf(args.input, args.output, languages, entities, threshold, allow_terms, deny_terms, args.keep_outline, counts=counts, redacted=redacted, image_only_pages=image_only_pages, findings=findings)
     except RedactionError as error:
         print(f"pii-strip: error: {error}", file=sys.stderr)
 
         return 1
-
-    print(f"redacted {redacted_areas} item(s)", file=sys.stderr)
 
     if image_only_pages:
         pages = ", ".join(str(number) for number in image_only_pages)
         print(f"pii-strip: warning: image-only page(s) found, e.g. scanned pages. They were not checked or redacted and may contain personal data: page {pages}", file=sys.stderr)
 
     residuals = verify_pdf(args.output, redacted, languages, entities, threshold, allow_terms, deny_terms)
+
+    if not args.quiet:
+        print(summary_line(findings, counts, residuals), file=sys.stderr)
 
     if residuals:
         print(f"pii-strip: error: the output is not clean: personal data is still in {args.output}. The file was kept so you can inspect it. Do not share it.", file=sys.stderr)

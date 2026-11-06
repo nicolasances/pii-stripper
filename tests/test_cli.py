@@ -348,3 +348,35 @@ def test_pii_left_in_the_output_exits_with_2_even_with_image_only_pages(tmp_path
     err = capsys.readouterr().err
     assert exit_code == 2
     assert "image-only" in err
+
+
+def test_a_summary_line_is_printed_on_stderr_by_default(tmp_path, capsys):
+    source = make_pdf(tmp_path / "in.pdf", [f"Write to {fake.email()} please"])
+
+    main([str(source), "-o", str(tmp_path / "out.pdf"), "--entities", "EMAIL_ADDRESS"])
+
+    captured = capsys.readouterr()
+    assert "redacted 1 item on 1 page (EMAIL_ADDRESS 1)" in captured.err
+    assert "verification OK" in captured.err
+    assert captured.out == ""
+
+
+def test_quiet_suppresses_the_summary_line(tmp_path, capsys):
+    source = make_pdf(tmp_path / "in.pdf", [f"Write to {fake.email()} please"])
+
+    exit_code = main([str(source), "-o", str(tmp_path / "out.pdf"), "--entities", "EMAIL_ADDRESS", "--quiet"])
+
+    assert exit_code == 0
+    assert capsys.readouterr().err == ""
+
+
+def test_quiet_still_prints_warnings_and_errors(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr("pii_strip.redactor._whole_word_hits", lambda page, pii, words: [])
+    source = make_mixed_pdf(tmp_path / "in.pdf", [f"Write to {fake.email()} please", (IMAGE_PAGE, "Scanned page")])
+
+    main([str(source), "-o", str(tmp_path / "out.pdf"), "--entities", "EMAIL_ADDRESS", "--quiet"])
+
+    err = capsys.readouterr().err
+    assert "image-only" in err
+    assert "not clean" in err
+    assert "verification" not in err

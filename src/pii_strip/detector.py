@@ -4,12 +4,14 @@ from presidio_analyzer import RecognizerResult
 from presidio_analyzer.predefined_recognizers import EmailRecognizer
 
 from pii_strip.cpr import DK_CPR, CprRecognizer
-from pii_strip.nlp import DEFAULT_ENTITIES, SUPPORTED_LANGUAGES, find_named_entities
+from pii_strip.nlp import DEFAULT_ENTITIES, LANGUAGE_KEY, NER_ENTITIES, SUPPORTED_LANGUAGES, find_named_entities
 from pii_strip.phone import DK_PHONE, PhoneRecognizer
 from pii_strip.term_lists import DEFAULT_THRESHOLD
 
 DENY_LIST = "DENY_LIST"
 DENY_LIST_SOURCE = "deny_list"
+NER_SOURCE = "ner"
+PATTERN_SOURCE = "pattern"
 
 _email_recognizer = EmailRecognizer()
 _cpr_recognizer = CprRecognizer()
@@ -32,6 +34,19 @@ def find_deny_list_results(text: str, deny_terms: list[str]) -> list[RecognizerR
             results.append(RecognizerResult(DENY_LIST, match.start(), match.end(), 1.0, recognition_metadata={RecognizerResult.RECOGNIZER_NAME_KEY: DENY_LIST_SOURCE}))
 
     return results
+
+
+def source_of(result: RecognizerResult) -> str:
+    """How the result was found: by the deny list, by a language model (NER) or by a pattern."""
+    if result.entity_type == DENY_LIST:
+        return DENY_LIST_SOURCE
+
+    return NER_SOURCE if result.entity_type in NER_ENTITIES else PATTERN_SOURCE
+
+
+def language_of(result: RecognizerResult) -> str | None:
+    """The language whose model found the result, or None for the language-independent patterns and the deny list."""
+    return (result.recognition_metadata or {}).get(LANGUAGE_KEY)
 
 
 def find_pii_results(text: str, languages: list[str] | None = None, entities: list[str] | None = None, threshold: float = DEFAULT_THRESHOLD, allow_terms: list[str] | None = None, deny_terms: list[str] | None = None) -> list[RecognizerResult]:
@@ -60,6 +75,6 @@ def find_pii_strings(text: str, languages: list[str] | None = None, entities: li
     return {text[result.start:result.end] for result in find_pii_results(text, languages, entities, threshold, allow_terms, deny_terms)}
 
 
-def find_pii_entity_types(text: str, languages: list[str] | None = None, entities: list[str] | None = None, threshold: float = DEFAULT_THRESHOLD, allow_terms: list[str] | None = None, deny_terms: list[str] | None = None) -> dict[str, str]:
-    """Return the distinct strings in the text that are detected as PII, each with its entity type."""
-    return {text[result.start:result.end]: result.entity_type for result in find_pii_results(text, languages, entities, threshold, allow_terms, deny_terms)}
+def find_distinct_pii_results(text: str, languages: list[str] | None = None, entities: list[str] | None = None, threshold: float = DEFAULT_THRESHOLD, allow_terms: list[str] | None = None, deny_terms: list[str] | None = None) -> dict[str, RecognizerResult]:
+    """Return the distinct strings in the text that are detected as PII, each with a finding for it (entity type, score, source)."""
+    return {text[result.start:result.end]: result for result in find_pii_results(text, languages, entities, threshold, allow_terms, deny_terms)}
