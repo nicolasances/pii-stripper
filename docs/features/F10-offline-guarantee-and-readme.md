@@ -1,5 +1,7 @@
 # F10 — Offline guarantee and README
 
+![Status](https://img.shields.io/badge/status-implemented-brightgreen?style=flat-square)
+
 ## 1. Purpose & Scope
 
 Guarantee, and prove with a test, that the tool processes documents **without any network access**. Document installation, usage, limitations and licensing in a README.
@@ -47,13 +49,16 @@ Documents with PII must never leave the developer's machine. This follows DR's g
 |---|----------|-----------|
 | TD-01 | Prove offline behavior with an automated test that blocks sockets | A test is permanent; a manual check only proves one moment |
 | TD-02 | Fail instead of downloading a missing model | Prevents a hidden network call; makes installation explicit |
+| TD-03 | The test blocks `socket.connect`, `connect_ex`, `create_connection`, `getaddrinfo` and `gethostbyname`, and records every attempt | A library that catches the error and carries on still fails the test |
+| TD-04 | The test clears the cached analyzer first, so the models are loaded while the network is blocked | Otherwise an earlier test would have loaded them with the network on |
+| TD-05 | No Hugging Face offline mode is set | Only spaCy wheel models are used (F04 TD-01); nothing reads from the Hugging Face hub |
 
 ## 6. Success Criteria
 
 | # | Criterion | Notes |
 |---|-----------|-------|
 | SC-01 | The offline test passes with network sockets blocked | Part of the regular test suite |
-| SC-02 | A manual run with the network off on a fresh install (after model installation) succeeds | Run once, and note it in the README |
+| SC-02 | A manual run with the network off on a fresh install (after model installation) succeeds | The steps are in the README; **not yet run and recorded** |
 | SC-03 | The README covers every item listed under Business Logic | Reviewed by the developer |
 | SC-04 | A missing model fails with exit code `1` and no network attempt | Shared with F04 SC-04 |
 
@@ -61,5 +66,5 @@ Documents with PII must never leave the developer's machine. This follows DR's g
 
 | # | Question | Notes |
 |---|----------|-------|
-| OQ-01 | Do any of the libraries (PyMuPDF, Presidio, spaCy) have telemetry or update checks in current versions? | Not known; the offline test will reveal it |
-| OQ-02 | Should the README be in Danish, English or both? | Developers at DR; English is probably fine |
+| OQ-01 | Do any of the libraries (PyMuPDF, Presidio, spaCy) have telemetry or update checks in current versions? | **Resolved:** the offline test passes with every entity type, sanitizing, the verification pass and the report, so no network call is made at runtime with the pinned versions |
+| OQ-02 | Should the README be in Danish, English or both? | **Resolved:** English |
