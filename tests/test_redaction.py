@@ -169,3 +169,78 @@ def test_keeps_a_date_and_an_amount_written_with_eight_digits(tmp_path):
     assert "01012024" in text
     assert "12.345.678" in text
     assert count == 0
+
+
+def test_a_short_detected_string_is_not_redacted_inside_longer_words(tmp_path, monkeypatch):
+    monkeypatch.setattr("pii_strip.redactor.find_pii_strings", lambda text, languages=None, entities=None: {"An"})
+    source = make_pdf(tmp_path / "in.pdf", ["UDVALGTE Anbefalinger: An Nguyen led the transformation and the organization."])
+    output = tmp_path / "out.pdf"
+
+    redact_pdf(source, output)
+
+    text = extract_text(output)
+    assert "Anbefalinger" in text
+    assert "transformation" in text
+    assert "organization" in text
+
+
+def test_a_short_detected_string_is_still_redacted_as_a_whole_word(tmp_path, monkeypatch):
+    monkeypatch.setattr("pii_strip.redactor.find_pii_strings", lambda text, languages=None, entities=None: {"An"})
+    source = make_pdf(tmp_path / "in.pdf", ["Anbefalinger: An Nguyen led the work."])
+    output = tmp_path / "out.pdf"
+
+    redact_pdf(source, output)
+
+    assert "Nguyen led" in extract_text(output)
+    assert "An Nguyen" not in extract_text(output)
+    assert "Anbefalinger" in extract_text(output)
+
+
+def test_a_name_followed_by_a_possessive_or_punctuation_is_still_redacted(tmp_path, monkeypatch):
+    monkeypatch.setattr("pii_strip.redactor.find_pii_strings", lambda text, languages=None, entities=None: {"Mette"})
+    source = make_pdf(tmp_path / "in.pdf", ["Mette, Mette's bil og (Mette) kom."])
+    output = tmp_path / "out.pdf"
+
+    redact_pdf(source, output)
+
+    assert "Mette" not in extract_text(output)
+
+
+def test_a_name_split_across_two_lines_is_still_redacted(tmp_path, monkeypatch):
+    monkeypatch.setattr("pii_strip.redactor.find_pii_strings", lambda text, languages=None, entities=None: {"Mette Hansen"})
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_text((72, 72), "Kontakt Mette", fontsize=11)
+    page.insert_text((72, 90), "Hansen i dag.", fontsize=11)
+    source = tmp_path / "in.pdf"
+    doc.save(source)
+    doc.close()
+    output = tmp_path / "out.pdf"
+
+    redact_pdf(source, output)
+
+    text = extract_text(output)
+    assert "Mette" not in text
+    assert "Hansen" not in text
+
+
+def test_a_capitalised_detected_word_does_not_redact_the_same_word_in_lowercase(tmp_path, monkeypatch):
+    monkeypatch.setattr("pii_strip.redactor.find_pii_strings", lambda text, languages=None, entities=None: {"With"})
+    source = make_pdf(tmp_path / "in.pdf", ["With care. He works with the team."])
+    output = tmp_path / "out.pdf"
+
+    redact_pdf(source, output)
+
+    text = extract_text(output)
+    assert "works with the team" in text
+    assert "With care" not in text
+
+
+def test_a_name_written_in_capitals_is_still_redacted(tmp_path, monkeypatch):
+    monkeypatch.setattr("pii_strip.redactor.find_pii_strings", lambda text, languages=None, entities=None: {"Mette Hansen"})
+    source = make_pdf(tmp_path / "in.pdf", ["Signed: METTE HANSEN, today."])
+    output = tmp_path / "out.pdf"
+
+    redact_pdf(source, output)
+
+    assert "METTE" not in extract_text(output)

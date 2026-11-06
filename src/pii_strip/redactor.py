@@ -31,14 +31,51 @@ def _open_pdf(path: Path) -> pymupdf.Document:
     return doc
 
 
-def redact_pdf(input_path: Path, output_path: Path) -> int:
+def _is_whole_word_match(words_text: str, pii: str) -> bool:
+    """True if the PII occurs in the words as whole words, or the words are a whole-word part of a PII that wraps over lines.
+    'An' is not a match inside 'Anbefalinger' or 'transformation', but is one in 'An Nguyen' and in "Mette's".
+    The case must be the same as the detected string, or all capitals (a heading): a capitalised false positive such as 'With' must not redact every 'with'."""
+    if words_text.strip() and words_text in pii:
+        return True
+
+    for candidate in {pii, pii.upper()}:
+        start = words_text.find(candidate)
+
+        while start != -1:
+            end = start + len(candidate)
+
+            if (start == 0 or not words_text[start - 1].isalnum()) and (end == len(words_text) or not words_text[end].isalnum()):
+                return True
+
+            start = words_text.find(candidate, start + 1)
+
+    return False
+
+
+def _whole_word_hits(page: pymupdf.Page, pii: str, words: list) -> list[pymupdf.Rect]:
+    """Where the PII occurs on the page. A plain text search also finds it inside longer words, which must not be redacted."""
+    hits = []
+
+    for rect in page.search_for(pii):
+        area = pymupdf.Rect(rect.x0 + 0.5, rect.y0 + 0.5, rect.x1 - 0.5, rect.y1 - 0.5)
+        words_text = " ".join(word[4] for word in words if pymupdf.Rect(word[:4]).intersects(area))
+
+        if _is_whole_word_match(words_text, pii):
+            hits.append(rect)
+
+    return hits
+
+
+def redact_pdf(input_path: Path, output_path: Path, languages: list[str] | None = None, entities: list[str] | None = None) -> int:
     """Write a copy of the input PDF with detected PII truly removed (not just covered). Returns the number of redacted areas."""
     doc = _open_pdf(input_path)
     redacted_areas = 0
 
     for page in doc:
-        for pii in find_pii_strings(page.get_text()):
-            for rect in page.search_for(pii):
+        words = page.get_text("words")
+
+        for pii in find_pii_strings(page.get_text(), languages, entities):
+            for rect in _whole_word_hits(page, pii, words):
                 page.add_redact_annot(rect, fill=BLACK)
                 redacted_areas += 1
 
