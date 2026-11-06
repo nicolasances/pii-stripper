@@ -3,7 +3,7 @@ import pytest
 from faker import Faker
 
 from pii_strip.redactor import redact_pdf
-from tests.support.pdf_factory import extract_text, make_pdf, page_count
+from tests.support.pdf_factory import EMPTY_PAGE, IMAGE_PAGE, extract_text, make_mixed_pdf, make_pdf, page_count
 
 fake = Faker("da_DK")
 Faker.seed(1234)
@@ -329,3 +329,45 @@ def test_redacts_a_deny_term_that_wraps_over_two_lines(tmp_path):
     assert "rod" not in text
     assert "kolibri" not in text
     assert "hemmeligt" in text
+
+
+def test_lists_a_page_with_only_an_image_as_image_only(tmp_path):
+    source = make_mixed_pdf(tmp_path / "in.pdf", ["First text page", (IMAGE_PAGE, f"Scanned letter to {fake.email()}"), "Last text page"])
+    image_only_pages = []
+
+    redact_pdf(source, tmp_path / "out.pdf", image_only_pages=image_only_pages)
+
+    assert image_only_pages == [2]
+
+
+def test_an_empty_page_is_not_image_only(tmp_path):
+    source = make_mixed_pdf(tmp_path / "in.pdf", ["Text page", EMPTY_PAGE])
+    image_only_pages = []
+
+    redact_pdf(source, tmp_path / "out.pdf", image_only_pages=image_only_pages)
+
+    assert image_only_pages == []
+
+
+def test_a_page_with_only_whitespace_text_and_an_image_is_image_only(tmp_path):
+    source = make_mixed_pdf(tmp_path / "in.pdf", [(IMAGE_PAGE, "Scanned page")])
+    doc = pymupdf.open(source)
+    doc[0].insert_text((72, 700), "   ", fontsize=11)
+    doc.save(tmp_path / "spaced.pdf")
+    doc.close()
+    image_only_pages = []
+
+    redact_pdf(tmp_path / "spaced.pdf", tmp_path / "out.pdf", image_only_pages=image_only_pages)
+
+    assert image_only_pages == [1]
+
+
+def test_text_pages_are_still_redacted_next_to_an_image_only_page(tmp_path):
+    email = fake.email()
+    source = make_mixed_pdf(tmp_path / "in.pdf", [f"Write to {email} please", (IMAGE_PAGE, "Scanned page")])
+    output = tmp_path / "out.pdf"
+
+    redact_pdf(source, output, image_only_pages=[])
+
+    assert email not in extract_text(output)
+    assert "Write to" in extract_text(output)

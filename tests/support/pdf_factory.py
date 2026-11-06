@@ -78,3 +78,33 @@ def make_hidden_pii_pdf(path: Path) -> Path:
 
 def raw_bytes_contain(path: Path, text: str) -> bool:
     return text.encode() in path.read_bytes()
+
+
+IMAGE_PAGE = "<image page>"
+EMPTY_PAGE = "<empty page>"
+
+
+def make_mixed_pdf(path: Path, pages: list[str | tuple[str, str]]) -> Path:
+    """Create a PDF with a text page per string, a scanned page (an image of the text, no extractable text) per `(IMAGE_PAGE, text)` and a blank page per EMPTY_PAGE. Only ever pass synthetic (fake) PII."""
+    doc = pymupdf.open()
+
+    for entry in pages:
+        page = doc.new_page()
+
+        if entry == EMPTY_PAGE:
+            continue
+
+        if isinstance(entry, tuple) and entry[0] == IMAGE_PAGE:
+            scan = pymupdf.open()
+            scan.new_page().insert_text((72, 72), entry[1], fontsize=11)
+            pixmap = scan[0].get_pixmap(dpi=72)
+            scan.close()
+            page.insert_image(page.rect, pixmap=pixmap)
+            continue
+
+        page.insert_text((72, 72), entry, fontsize=11)
+
+    doc.save(path)
+    doc.close()
+
+    return path

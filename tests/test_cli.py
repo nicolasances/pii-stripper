@@ -3,7 +3,7 @@ from faker import Faker
 
 from pii_strip import __version__
 from pii_strip.cli import main
-from tests.support.pdf_factory import extract_text, make_encrypted_pdf, make_pdf
+from tests.support.pdf_factory import IMAGE_PAGE, EMPTY_PAGE, extract_text, make_encrypted_pdf, make_mixed_pdf, make_pdf
 
 fake = Faker("da_DK")
 Faker.seed(99)
@@ -306,3 +306,45 @@ def test_a_detected_string_the_redaction_search_misses_is_reported_as_left(tmp_p
     assert exit_code == 2
     assert "DENY_LIST on page 1" in capsys.readouterr().err
     assert output.exists()
+
+
+def test_an_image_only_page_is_named_in_a_warning_and_exits_with_3(tmp_path, capsys):
+    source = make_mixed_pdf(tmp_path / "in.pdf", ["First text page", "Second text page", (IMAGE_PAGE, f"Scanned letter to {fake.email()}")])
+    output = tmp_path / "out.pdf"
+
+    exit_code = main([str(source), "-o", str(output), "--entities", "EMAIL_ADDRESS"])
+
+    err = capsys.readouterr().err
+    assert exit_code == 3
+    assert "image-only" in err
+    assert "page 3" in err
+    assert output.exists()
+
+
+def test_allow_image_pages_exits_with_0_and_still_warns(tmp_path, capsys):
+    source = make_mixed_pdf(tmp_path / "in.pdf", ["First text page", "Second text page", (IMAGE_PAGE, "Scanned page")])
+
+    exit_code = main([str(source), "-o", str(tmp_path / "out.pdf"), "--entities", "EMAIL_ADDRESS", "--allow-image-pages"])
+
+    assert exit_code == 0
+    assert "page 3" in capsys.readouterr().err
+
+
+def test_an_empty_page_does_not_warn_or_change_the_exit_code(tmp_path, capsys):
+    source = make_mixed_pdf(tmp_path / "in.pdf", ["Text page", EMPTY_PAGE])
+
+    exit_code = main([str(source), "-o", str(tmp_path / "out.pdf"), "--entities", "EMAIL_ADDRESS"])
+
+    assert exit_code == 0
+    assert "image-only" not in capsys.readouterr().err
+
+
+def test_pii_left_in_the_output_exits_with_2_even_with_image_only_pages(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr("pii_strip.redactor._whole_word_hits", lambda page, pii, words: [])
+    source = make_mixed_pdf(tmp_path / "in.pdf", [f"Write to {fake.email()} please", (IMAGE_PAGE, "Scanned page")])
+
+    exit_code = main([str(source), "-o", str(tmp_path / "out.pdf"), "--entities", "EMAIL_ADDRESS"])
+
+    err = capsys.readouterr().err
+    assert exit_code == 2
+    assert "image-only" in err
