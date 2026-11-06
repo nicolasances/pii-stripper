@@ -9,7 +9,7 @@ Index of the planned features for `pii-strip`. The overall idea is in [`../idea.
 | [F03 — Danish phone number detection](F03-danish-phone-detection.md) | ![Status](https://img.shields.io/badge/status-implemented-brightgreen?style=flat-square) |
 | [F04 — Names and places (Danish + English NER)](F04-names-and-places-ner.md) | ![Status](https://img.shields.io/badge/status-implemented-brightgreen?style=flat-square) |
 | [F05 — Deny list, allow list and threshold](F05-deny-allow-threshold.md) | ![Status](https://img.shields.io/badge/status-implemented-brightgreen?style=flat-square) |
-| [F06 — Sanitize metadata, annotations and attachments](F06-sanitize-hidden-content.md) | planned |
+| [F06 — Sanitize metadata, annotations and attachments](F06-sanitize-hidden-content.md) | ![Status](https://img.shields.io/badge/status-implemented-brightgreen?style=flat-square) |
 | [F07 — Verification pass and exit code 2](F07-verification-pass.md) | planned |
 | [F08 — Image-only page detection and exit code 3](F08-image-only-pages.md) | planned |
 | [F09 — JSON report and summary line](F09-json-report.md) | planned |
