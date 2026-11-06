@@ -178,3 +178,66 @@ def test_entities_flag_restricts_what_is_redacted(tmp_path):
     text = extract_text(output)
     assert "mary@example.com" not in text
     assert "Mary Johnson" in text
+
+
+def test_a_missing_deny_file_exits_with_1_and_names_the_file(tmp_path, capsys):
+    source = make_pdf(tmp_path / "in.pdf", ["Hello"])
+
+    exit_code = main([str(source), "-o", str(tmp_path / "out.pdf"), "--deny", str(tmp_path / "nope.txt")])
+
+    assert exit_code == 1
+    assert "nope.txt" in capsys.readouterr().err
+    assert not (tmp_path / "out.pdf").exists()
+
+
+def test_a_missing_allow_file_exits_with_1_and_names_the_file(tmp_path, capsys):
+    source = make_pdf(tmp_path / "in.pdf", ["Hello"])
+
+    exit_code = main([str(source), "-o", str(tmp_path / "out.pdf"), "--allow", str(tmp_path / "nope.txt")])
+
+    assert exit_code == 1
+    assert "nope.txt" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("threshold", ["1.5", "-1", "high"])
+def test_an_invalid_threshold_exits_with_1(tmp_path, capsys, threshold):
+    source = make_pdf(tmp_path / "in.pdf", ["Hello"])
+
+    exit_code = main([str(source), "-o", str(tmp_path / "out.pdf"), "--threshold", threshold])
+
+    assert exit_code == 1
+    assert "threshold" in capsys.readouterr().err.lower()
+
+
+def test_the_deny_file_makes_the_cli_redact_a_term(tmp_path):
+    source = make_pdf(tmp_path / "in.pdf", ["Projektet hedder kolibri og er hemmeligt."])
+    deny = tmp_path / "deny.txt"
+    deny.write_text("# secret names\nkolibri\n", encoding="utf-8")
+    output = tmp_path / "out.pdf"
+
+    exit_code = main([str(source), "-o", str(output), "--deny", str(deny)])
+
+    assert exit_code == 0
+    assert "kolibri" not in extract_text(output)
+
+
+def test_the_allow_file_makes_the_cli_keep_a_term(tmp_path):
+    source = make_pdf(tmp_path / "in.pdf", ["Skriv til info@acme.dk i dag"])
+    allow = tmp_path / "allow.txt"
+    allow.write_text("INFO@acme.dk\n", encoding="utf-8")
+    output = tmp_path / "out.pdf"
+
+    exit_code = main([str(source), "-o", str(output), "--allow", str(allow)])
+
+    assert exit_code == 0
+    assert "info@acme.dk" in extract_text(output)
+
+
+def test_the_threshold_flag_reaches_the_detector(tmp_path):
+    source = make_pdf(tmp_path / "in.pdf", ["tlf. 12345678"])
+    output = tmp_path / "out.pdf"
+
+    exit_code = main([str(source), "-o", str(output), "--threshold", "0.99"])
+
+    assert exit_code == 0
+    assert "12345678" in extract_text(output)

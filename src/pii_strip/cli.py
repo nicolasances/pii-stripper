@@ -5,6 +5,7 @@ from pathlib import Path
 from pii_strip import __version__
 from pii_strip.nlp import ModelMissingError, SUPPORTED_ENTITIES, parse_entities, parse_languages, require_models, NER_ENTITIES
 from pii_strip.redactor import RedactionError, redact_pdf
+from pii_strip.term_lists import DEFAULT_THRESHOLD, parse_threshold, read_term_list
 
 DISCLAIMER = "This tool is assistive, not a guarantee: no detector finds all personal data. Always review the output before you share it."
 
@@ -26,6 +27,9 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--force", action="store_true", help="overwrite the output file if it already exists")
     parser.add_argument("--lang", help="languages to analyze with, comma-separated (default: da,en)")
     parser.add_argument("--entities", help=f"entity types to detect, comma-separated (default: PERSON,EMAIL_ADDRESS,DK_CPR,DK_PHONE; supported: {','.join(SUPPORTED_ENTITIES)})")
+    parser.add_argument("--deny", type=Path, help="a text file with one term per line that is always redacted")
+    parser.add_argument("--allow", type=Path, help="a text file with one term per line that is never redacted (a term in both lists is redacted)")
+    parser.add_argument("--threshold", help=f"minimum score, from 0 to 1, for a finding to be redacted (default: {DEFAULT_THRESHOLD})")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
     return parser
@@ -59,6 +63,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         languages = parse_languages(args.lang)
         entities = parse_entities(args.entities)
+        threshold = parse_threshold(args.threshold)
+        deny_terms = read_term_list(args.deny) if args.deny else []
+        allow_terms = read_term_list(args.allow) if args.allow else []
 
         if any(entity in NER_ENTITIES for entity in entities):
             require_models(languages)
@@ -68,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        redacted_areas = redact_pdf(args.input, args.output, languages, entities)
+        redacted_areas = redact_pdf(args.input, args.output, languages, entities, threshold, allow_terms, deny_terms)
     except RedactionError as error:
         print(f"pii-strip: error: {error}", file=sys.stderr)
 

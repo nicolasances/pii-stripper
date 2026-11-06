@@ -172,7 +172,7 @@ def test_keeps_a_date_and_an_amount_written_with_eight_digits(tmp_path):
 
 
 def test_a_short_detected_string_is_not_redacted_inside_longer_words(tmp_path, monkeypatch):
-    monkeypatch.setattr("pii_strip.redactor.find_pii_strings", lambda text, languages=None, entities=None: {"An"})
+    monkeypatch.setattr("pii_strip.redactor.find_pii_strings", lambda text, languages=None, entities=None, *args: {"An"})
     source = make_pdf(tmp_path / "in.pdf", ["UDVALGTE Anbefalinger: An Nguyen led the transformation and the organization."])
     output = tmp_path / "out.pdf"
 
@@ -185,7 +185,7 @@ def test_a_short_detected_string_is_not_redacted_inside_longer_words(tmp_path, m
 
 
 def test_a_short_detected_string_is_still_redacted_as_a_whole_word(tmp_path, monkeypatch):
-    monkeypatch.setattr("pii_strip.redactor.find_pii_strings", lambda text, languages=None, entities=None: {"An"})
+    monkeypatch.setattr("pii_strip.redactor.find_pii_strings", lambda text, languages=None, entities=None, *args: {"An"})
     source = make_pdf(tmp_path / "in.pdf", ["Anbefalinger: An Nguyen led the work."])
     output = tmp_path / "out.pdf"
 
@@ -197,7 +197,7 @@ def test_a_short_detected_string_is_still_redacted_as_a_whole_word(tmp_path, mon
 
 
 def test_a_name_followed_by_a_possessive_or_punctuation_is_still_redacted(tmp_path, monkeypatch):
-    monkeypatch.setattr("pii_strip.redactor.find_pii_strings", lambda text, languages=None, entities=None: {"Mette"})
+    monkeypatch.setattr("pii_strip.redactor.find_pii_strings", lambda text, languages=None, entities=None, *args: {"Mette"})
     source = make_pdf(tmp_path / "in.pdf", ["Mette, Mette's bil og (Mette) kom."])
     output = tmp_path / "out.pdf"
 
@@ -207,7 +207,7 @@ def test_a_name_followed_by_a_possessive_or_punctuation_is_still_redacted(tmp_pa
 
 
 def test_a_name_split_across_two_lines_is_still_redacted(tmp_path, monkeypatch):
-    monkeypatch.setattr("pii_strip.redactor.find_pii_strings", lambda text, languages=None, entities=None: {"Mette Hansen"})
+    monkeypatch.setattr("pii_strip.redactor.find_pii_strings", lambda text, languages=None, entities=None, *args: {"Mette Hansen"})
     doc = pymupdf.open()
     page = doc.new_page()
     page.insert_text((72, 72), "Kontakt Mette", fontsize=11)
@@ -225,7 +225,7 @@ def test_a_name_split_across_two_lines_is_still_redacted(tmp_path, monkeypatch):
 
 
 def test_a_capitalised_detected_word_does_not_redact_the_same_word_in_lowercase(tmp_path, monkeypatch):
-    monkeypatch.setattr("pii_strip.redactor.find_pii_strings", lambda text, languages=None, entities=None: {"With"})
+    monkeypatch.setattr("pii_strip.redactor.find_pii_strings", lambda text, languages=None, entities=None, *args: {"With"})
     source = make_pdf(tmp_path / "in.pdf", ["With care. He works with the team."])
     output = tmp_path / "out.pdf"
 
@@ -237,10 +237,95 @@ def test_a_capitalised_detected_word_does_not_redact_the_same_word_in_lowercase(
 
 
 def test_a_name_written_in_capitals_is_still_redacted(tmp_path, monkeypatch):
-    monkeypatch.setattr("pii_strip.redactor.find_pii_strings", lambda text, languages=None, entities=None: {"Mette Hansen"})
+    monkeypatch.setattr("pii_strip.redactor.find_pii_strings", lambda text, languages=None, entities=None, *args: {"Mette Hansen"})
     source = make_pdf(tmp_path / "in.pdf", ["Signed: METTE HANSEN, today."])
     output = tmp_path / "out.pdf"
 
     redact_pdf(source, output)
 
     assert "METTE" not in extract_text(output)
+
+
+def test_redacts_a_deny_term_that_the_detector_does_not_find(tmp_path):
+    source = make_pdf(tmp_path / "in.pdf", ["Projektet hedder kolibri og er hemmeligt."])
+    output = tmp_path / "out.pdf"
+
+    redact_pdf(source, output, deny_terms=["kolibri"])
+
+    assert "kolibri" not in extract_text(output)
+    assert "hemmeligt" in extract_text(output)
+
+
+def test_redacts_a_deny_term_whatever_its_case_in_the_document(tmp_path):
+    source = make_pdf(tmp_path / "in.pdf", ["Projektet hedder KOLIBRI og er hemmeligt."])
+    output = tmp_path / "out.pdf"
+
+    redact_pdf(source, output, deny_terms=["kolibri"])
+
+    assert "KOLIBRI" not in extract_text(output)
+
+
+def test_does_not_redact_a_deny_term_inside_a_longer_word(tmp_path):
+    source = make_pdf(tmp_path / "in.pdf", ["se kolibrierne flyve"])
+    output = tmp_path / "out.pdf"
+
+    redact_pdf(source, output, entities=["EMAIL_ADDRESS"], deny_terms=["kolibri"])
+
+    assert "kolibrierne" in extract_text(output)
+
+
+def test_a_deny_term_is_still_redacted_at_the_maximum_threshold(tmp_path):
+    source = make_pdf(tmp_path / "in.pdf", ["Projektet hedder kolibri og er hemmeligt."])
+    output = tmp_path / "out.pdf"
+
+    redact_pdf(source, output, threshold=1.0, deny_terms=["kolibri"])
+
+    assert "kolibri" not in extract_text(output)
+
+
+def test_keeps_an_allowed_email_and_redacts_the_other(tmp_path):
+    source = make_pdf(tmp_path / "in.pdf", ["Skriv til info@acme.dk eller til anna.larsen@example.dk"])
+    output = tmp_path / "out.pdf"
+
+    redact_pdf(source, output, allow_terms=["info@acme.dk"])
+
+    text = extract_text(output)
+    assert "info@acme.dk" in text
+    assert "anna.larsen@example.dk" not in text
+
+
+def test_redacts_a_term_that_is_on_both_lists(tmp_path):
+    source = make_pdf(tmp_path / "in.pdf", ["Skriv til info@acme.dk i dag"])
+    output = tmp_path / "out.pdf"
+
+    redact_pdf(source, output, allow_terms=["info@acme.dk"], deny_terms=["info@acme.dk"])
+
+    assert "info@acme.dk" not in extract_text(output)
+
+
+def test_a_higher_threshold_redacts_fewer_items(tmp_path):
+    source = make_pdf(tmp_path / "in.pdf", ["tlf. 12345678"])
+
+    at_default = redact_pdf(source, tmp_path / "default.pdf")
+    at_maximum = redact_pdf(source, tmp_path / "strict.pdf", threshold=0.99)
+
+    assert at_default == 1
+    assert at_maximum == 0
+
+
+def test_redacts_a_deny_term_that_wraps_over_two_lines(tmp_path):
+    source = tmp_path / "in.pdf"
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_text((72, 72), "projekt rod", fontsize=11)
+    page.insert_text((72, 90), "kolibri er hemmeligt", fontsize=11)
+    doc.save(source)
+    doc.close()
+    output = tmp_path / "out.pdf"
+
+    redact_pdf(source, output, entities=["EMAIL_ADDRESS"], deny_terms=["rod kolibri"])
+
+    text = extract_text(output)
+    assert "rod" not in text
+    assert "kolibri" not in text
+    assert "hemmeligt" in text
