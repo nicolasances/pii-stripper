@@ -90,3 +90,13 @@ def test_verification_is_ok_when_nothing_is_left():
     report = build_report(Path("in.pdf"), Path("out.pdf"), datetime.now(timezone.utc), {}, [], [], SanitizeCounts(), [], 0)
 
     assert report["verification"] == {"status": "ok", "residuals": []}
+
+
+def test_the_matched_text_is_in_the_report_only_when_asked_for():
+    finding = Finding(text="mette@example.invalid", entity_type="EMAIL_ADDRESS", page=1, score=1.0, language=None, source="pattern", areas=())
+
+    without_text = build_report(Path("in.pdf"), Path("out.pdf"), datetime.now(timezone.utc), {}, [finding], [], SanitizeCounts(), [], 0)
+    with_text = build_report(Path("in.pdf"), Path("out.pdf"), datetime.now(timezone.utc), {}, [finding], [], SanitizeCounts(), [], 0, include_text=True)
+
+    assert "text" not in without_text["findings"][0]
+    assert with_text["findings"][0]["text"] == "mette@example.invalid"

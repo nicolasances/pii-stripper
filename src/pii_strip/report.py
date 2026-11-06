@@ -64,8 +64,8 @@ def _hash(finding: Finding) -> str | None:
     return hashlib.sha256(finding.text.encode("utf-8")).hexdigest()
 
 
-def _finding_entry(finding: Finding) -> dict:
-    return {
+def _finding_entry(finding: Finding, include_text: bool) -> dict:
+    entry = {
         "entity_type": finding.entity_type,
         "page": finding.page,
         "score": finding.score,
@@ -75,15 +75,20 @@ def _finding_entry(finding: Finding) -> dict:
         "sha256": _hash(finding),
     }
 
+    if include_text:
+        entry["text"] = finding.text
 
-def build_report(input_path: Path, output_path: Path, started_at: datetime, configuration: dict, findings: list[Finding], image_only_pages: list[int], counts: SanitizeCounts, residuals: list[Residual], exit_code: int) -> dict:
-    """The JSON report of a run (F09). It holds no matched text, only a hash of it; residuals are listed by entity type and page only."""
+    return entry
+
+
+def build_report(input_path: Path, output_path: Path, started_at: datetime, configuration: dict, findings: list[Finding], image_only_pages: list[int], counts: SanitizeCounts, residuals: list[Residual], exit_code: int, include_text: bool = False) -> dict:
+    """The JSON report of a run (F09). Unless include_text is set, it holds no matched text, only a hash of it; residuals are listed by entity type and page only."""
     return {
         "schema_version": REPORT_SCHEMA_VERSION,
         "tool": {"name": "pii-strip", "version": __version__},
         "run": {"input": str(input_path), "output": str(output_path), "started_at": started_at.isoformat()},
         "configuration": configuration,
-        "findings": [_finding_entry(finding) for finding in findings],
+        "findings": [_finding_entry(finding, include_text) for finding in findings],
         "image_only_pages": image_only_pages,
         "sanitize": asdict(counts),
         "verification": {"status": "failed" if residuals else "ok", "residuals": [asdict(residual) for residual in residuals]},

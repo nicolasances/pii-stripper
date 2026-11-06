@@ -463,3 +463,26 @@ def test_a_report_that_cannot_be_written_exits_with_1(tmp_path, capsys):
 
     assert exit_code == 1
     assert "report" in capsys.readouterr().err.lower()
+
+
+def test_report_include_text_writes_the_matched_text_and_warns(tmp_path, capsys):
+    email = fake.email()
+    source = make_pdf(tmp_path / "in.pdf", [f"Write to {email} please"])
+    report_path = tmp_path / "findings.json"
+
+    main([str(source), "-o", str(tmp_path / "out.pdf"), "--entities", "EMAIL_ADDRESS", "--report", str(report_path), "--report-include-text", "--quiet"])
+
+    assert json.loads(report_path.read_text())["findings"][0]["text"] == email
+    err = capsys.readouterr().err
+    assert "warning" in err
+    assert "contains personal data" in err
+    assert email not in err
+
+
+def test_report_include_text_without_report_exits_with_1(tmp_path, capsys):
+    source = make_pdf(tmp_path / "in.pdf", ["Hello"])
+
+    exit_code = main([str(source), "-o", str(tmp_path / "out.pdf"), "--report-include-text"])
+
+    assert exit_code == 1
+    assert "--report" in capsys.readouterr().err

@@ -37,6 +37,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--keep-outline", action="store_true", help="keep the bookmarks (outline); they are removed by default because their titles can contain names")
     parser.add_argument("--allow-image-pages", action="store_true", help="accept pages that are only an image (e.g. scanned): they can't be checked or redacted; they are still listed in a warning, but the exit code is not 3")
     parser.add_argument("--report", type=Path, help="write a JSON report of the run to this file; it lists the findings with a hash of the matched text, not the text itself")
+    parser.add_argument("--report-include-text", action="store_true", help="also write the matched text into the report; the report then contains personal data and must not be shared")
     parser.add_argument("--quiet", action="store_true", help="don't print the summary line; warnings and errors are still printed")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
@@ -68,6 +69,7 @@ def _configuration(args: argparse.Namespace, languages: list[str], entities: lis
         "allow_file": str(args.allow) if args.allow else None,
         "keep_outline": args.keep_outline,
         "allow_image_pages": args.allow_image_pages,
+        "report_include_text": args.report_include_text,
     }
 
 
@@ -81,6 +83,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if _same_file(args.input, args.output):
         print("pii-strip: error: the input and output are the same file; choose a different output path", file=sys.stderr)
+
+        return 1
+
+    if args.report_include_text and not args.report:
+        print("pii-strip: error: --report-include-text needs --report", file=sys.stderr)
 
         return 1
 
@@ -140,7 +147,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.report:
         configuration = _configuration(args, languages, entities, threshold)
-        report = build_report(args.input, args.output, started_at, configuration, findings, image_only_pages, counts, residuals, exit_code)
+        report = build_report(args.input, args.output, started_at, configuration, findings, image_only_pages, counts, residuals, exit_code, args.report_include_text)
 
         try:
             write_report(args.report, report)
@@ -148,6 +155,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"pii-strip: error: cannot write the report {args.report} ({error})", file=sys.stderr)
 
             return 2 if exit_code == 2 else 1
+
+        if args.report_include_text:
+            print(f"pii-strip: warning: the report {args.report} contains personal data (the matched text). Do not share it.", file=sys.stderr)
 
     return exit_code
 
