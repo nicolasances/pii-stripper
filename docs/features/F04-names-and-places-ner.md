@@ -89,7 +89,9 @@ This feature carries the **project's biggest risk**: whether Danish NER finds en
 - The recall check counts a name as found when a same-type finding contains it, and a finding as correct when it overlaps an expected one of the same type.
 - A 10-page synthetic document took under 1 second (short pages, models already installed), well inside the SC-06 budget. Not measured on dense real pages.
 
-**`LOCATION` default (OQ-02):** off. Enable it with `--entities PERSON,LOCATION,...`. The default entity set is `PERSON`, `EMAIL_ADDRESS`, `DK_CPR` and `DK_PHONE`.
+**`LOCATION` default (OQ-02):** off. Enable it with `--entities PERSON,LOCATION,...`. The default entity set is `PERSON`, `EMAIL_ADDRESS`, `DK_CPR`, `DK_PHONE` and `SOCIAL_PROFILE`.
+
+**`SOCIAL_PROFILE` (#21):** a pattern entity type, on by default, for profile URLs on LinkedIn (`linkedin.com/in/…`), Facebook, Instagram, X/Twitter, GitHub and TikTok (`tiktok.com/@…`), with or without the scheme and a `www.` or two-letter subdomain. The whole URL is redacted, not only the profile name. A platform without a profile and a LinkedIn company page are not matched. Bare `@handles` and other platforms are not detected.
 
 **Design notes:**
 - `nlp.build_analyzer` creates a Presidio `AnalyzerEngine` with an explicit `SpacyNlpEngine` (one model per requested language) and one `SpacyRecognizer` per language. Danish labels `PER` and `LOC` and English `GPE` map to `PERSON` and `LOCATION`; every other label is ignored.

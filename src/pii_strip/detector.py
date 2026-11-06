@@ -6,6 +6,7 @@ from presidio_analyzer.predefined_recognizers import EmailRecognizer
 from pii_strip.cpr import DK_CPR, CprRecognizer
 from pii_strip.nlp import DEFAULT_ENTITIES, LANGUAGE_KEY, NER_ENTITIES, SUPPORTED_LANGUAGES, find_named_entities
 from pii_strip.phone import DK_PHONE, PhoneRecognizer
+from pii_strip.social import SOCIAL_PROFILE, SocialProfileRecognizer
 from pii_strip.term_lists import DEFAULT_THRESHOLD
 
 DENY_LIST = "DENY_LIST"
@@ -16,6 +17,7 @@ PATTERN_SOURCE = "pattern"
 _email_recognizer = EmailRecognizer()
 _cpr_recognizer = CprRecognizer()
 _phone_recognizer = PhoneRecognizer()
+_social_recognizer = SocialProfileRecognizer()
 
 
 def without_phone_overlapping_cpr(phone_results: list[RecognizerResult], cpr_results: list[RecognizerResult]) -> list[RecognizerResult]:
@@ -61,9 +63,10 @@ def find_pii_results(text: str, languages: list[str] | None = None, entities: li
     cpr_results = _cpr_recognizer.analyze(text, entities=[DK_CPR])
     phone_results = without_phone_overlapping_cpr(_phone_recognizer.analyze(text, entities=[DK_PHONE]), cpr_results) if DK_PHONE in entities else []
     cpr_results = cpr_results if DK_CPR in entities else []
+    social_results = _social_recognizer.analyze(text, entities=[SOCIAL_PROFILE]) if SOCIAL_PROFILE in entities else []
     name_results = find_named_entities(text, languages, entities)
 
-    pattern_results = [result for result in email_results + cpr_results + phone_results if result.score >= threshold]
+    pattern_results = [result for result in email_results + cpr_results + phone_results + social_results if result.score >= threshold]
     name_results = [name for name in name_results if not any(name.start < pattern.end and pattern.start < name.end for pattern in pattern_results)]
     detected = [result for result in pattern_results + name_results if result.score >= threshold and text[result.start:result.end].strip().casefold() not in allowed]
 

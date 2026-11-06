@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from pii_strip import __version__
-from pii_strip.nlp import ModelMissingError, SUPPORTED_ENTITIES, parse_entities, parse_languages, require_models, NER_ENTITIES
+from pii_strip.nlp import DEFAULT_ENTITIES, ModelMissingError, SUPPORTED_ENTITIES, parse_entities, parse_languages, require_models, NER_ENTITIES
 from pii_strip.redactor import Finding, RedactedString, RedactionError, redact_pdf
 from pii_strip.report import build_report, summary_line, write_report
 from pii_strip.sanitize import SanitizeCounts
@@ -30,7 +30,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("-o", "--output", type=Path, required=True, help="where to write the redacted PDF")
     parser.add_argument("--force", action="store_true", help="overwrite the output file if it already exists")
     parser.add_argument("--lang", help="languages to analyze with, comma-separated (default: da,en)")
-    parser.add_argument("--entities", help=f"entity types to detect, comma-separated (default: PERSON,EMAIL_ADDRESS,DK_CPR,DK_PHONE; supported: {','.join(SUPPORTED_ENTITIES)})")
+    parser.add_argument("--entities", help=f"entity types to detect, comma-separated (default: {','.join(DEFAULT_ENTITIES)}; supported: {','.join(SUPPORTED_ENTITIES)})")
     parser.add_argument("--deny", type=Path, help="a text file with one term per line that is always redacted")
     parser.add_argument("--allow", type=Path, help="a text file with one term per line that is never redacted (a term in both lists is redacted)")
     parser.add_argument("--threshold", help=f"minimum score, from 0 to 1, for a finding to be redacted (default: {DEFAULT_THRESHOLD})")

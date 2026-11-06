@@ -8,8 +8,8 @@ from presidio_analyzer.predefined_recognizers import SpacyRecognizer
 
 SUPPORTED_LANGUAGES = ["da", "en"]
 MODELS = {"da": "da_core_news_md", "en": "en_core_web_md"}
-SUPPORTED_ENTITIES = ["PERSON", "LOCATION", "EMAIL_ADDRESS", "DK_CPR", "DK_PHONE"]
-DEFAULT_ENTITIES = ["PERSON", "EMAIL_ADDRESS", "DK_CPR", "DK_PHONE"]
+SUPPORTED_ENTITIES = ["PERSON", "LOCATION", "EMAIL_ADDRESS", "DK_CPR", "DK_PHONE", "SOCIAL_PROFILE"]
+DEFAULT_ENTITIES = ["PERSON", "EMAIL_ADDRESS", "DK_CPR", "DK_PHONE", "SOCIAL_PROFILE"]
 NER_ENTITIES = ["PERSON", "LOCATION"]
 # The Danish model labels people PER and places LOC; the English model uses PERSON, GPE and LOC. Organizations are kept only to veto mislabelled people and places; every other label is ignored.
 ORGANIZATION = "ORGANIZATION"
