@@ -1,5 +1,7 @@
 # F09 — JSON report and summary line
 
+![Status](https://img.shields.io/badge/status-implemented-brightgreen?style=flat-square)
+
 ## 1. Purpose & Scope
 
 Tell the developer what happened in each run. A one-line summary always goes to stderr. An optional JSON report lists every finding, every sanitize action and the verification result, **without** writing the PII itself, so the report can't become a new leak.
