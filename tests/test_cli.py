@@ -292,3 +292,17 @@ def test_the_output_is_kept_when_verification_fails(tmp_path, monkeypatch):
 
     assert exit_code == 2
     assert output.exists()
+
+
+def test_a_detected_string_the_redaction_search_misses_is_reported_as_left(tmp_path, capsys):
+    """Known limitation (F01): a name typeset with a wide gap is detected, but the search on the page finds no area for it."""
+    source = make_pdf(tmp_path / "in.pdf", ["Kontakt Zyxwv     Qrstu i dag"])
+    deny = tmp_path / "deny.txt"
+    deny.write_text("Zyxwv Qrstu\n", encoding="utf-8")
+    output = tmp_path / "out.pdf"
+
+    exit_code = main([str(source), "-o", str(output), "--entities", "EMAIL_ADDRESS", "--deny", str(deny)])
+
+    assert exit_code == 2
+    assert "DENY_LIST on page 1" in capsys.readouterr().err
+    assert output.exists()
