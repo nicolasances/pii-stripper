@@ -1,3 +1,5 @@
+from presidio_analyzer import RecognizerResult
+
 from pii_strip import nlp
 from pii_strip.detector import find_pii_strings
 
@@ -56,3 +58,19 @@ def test_a_company_the_english_model_mistakes_for_a_person_is_not_detected():
 
 def test_a_company_with_a_legal_suffix_is_not_detected():
     assert "Tryg A/S" not in find_pii_strings("Tidligere Group CEO, Tryg A/S")
+
+
+def test_a_job_title_after_the_name_is_trimmed_off_the_name():
+    assert find_pii_strings("Ryan Mendez Head of Innovation", entities=["PERSON"]) == {"Ryan Mendez"}
+
+
+def test_a_job_title_on_the_next_line_is_trimmed_off_the_name():
+    assert find_pii_strings("Mette Jensen\nHead\nof Innovation", entities=["PERSON"]) == {"Mette Jensen"}
+
+
+def test_a_salutation_before_the_name_is_trimmed_off_the_name():
+    assert find_pii_strings("Kære Mette Hansen, tak for mødet.", entities=["PERSON"]) == {"Mette Hansen"}
+
+
+def test_a_span_that_is_only_title_words_is_dropped():
+    assert nlp.trim_non_name_words("Head Chef", [RecognizerResult("PERSON", 0, 9, 0.85)]) == []

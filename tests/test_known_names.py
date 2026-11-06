@@ -42,6 +42,22 @@ def test_a_one_word_name_that_is_a_salutation_or_title_is_not_spread():
     assert known_name_terms(["Vedr", "Hej", "Jensen"]) == {"Jensen"}
 
 
+def test_a_job_title_in_the_name_span_is_not_a_part():
+    assert known_name_terms(["Ryan Mendez Head", "Direktør Mette Jensen"]) == {"Ryan Mendez Head", "Ryan", "Mendez", "Direktør Mette Jensen", "Mette", "Jensen"}
+
+
+def test_a_job_title_next_to_a_name_is_not_redacted_elsewhere(tmp_path):
+    source = make_pdf(tmp_path / "in.pdf", ["Ryan Mendez Head of Innovation", "Head of Product is hiring."])
+    output = tmp_path / "out.pdf"
+
+    exit_code = main([str(source), "-o", str(output), "--quiet"])
+
+    assert exit_code == 0
+    assert "Mendez" not in extract_text(output)
+    assert "Head of Innovation" in extract_text(output)
+    assert "Head of Product" in extract_text(output)
+
+
 def test_lowercase_words_in_the_name_span_are_not_parts():
     assert known_name_terms(["Vi har talt med Mette"]) == {"Vi har talt med Mette", "Mette"}
 
