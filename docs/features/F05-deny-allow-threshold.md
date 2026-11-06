@@ -46,6 +46,7 @@ This is the cheap safety net for the NER risk in F04.
 | TD-01 | Deny terms are found by a plain text search (`find_deny_list_results` in `detector.py`), not a Presidio recognizer | Whitespace in a term also matches a line break, so a term that wraps over two lines is redacted. A deny finding keeps the case of the text, so the redactor needs no special case |
 | TD-02 | Deny wins over allow | For a PII tool, a false positive is cheaper than a leak |
 | TD-03 | Plain text files, not YAML or JSON | The simplest format to edit and to version |
+| TD-04 | The allow list also applies to known names and their parts (F04 TD-05), ignoring case, and to `SOCIAL_PROFILE` URLs | Allowing a common surname such as `Hansen` is the remedy for the document-wide name redaction over-redacting it (#21) |
 
 ## 6. Success Criteria
 

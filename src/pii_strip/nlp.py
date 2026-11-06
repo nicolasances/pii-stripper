@@ -61,6 +61,24 @@ def is_plausible_name(span: str) -> bool:
     return span[:1].isupper() and not any(character.isdigit() for character in span)
 
 
+MIN_NAME_PART_LENGTH = 3
+# Words the NER models include in a name span that are not part of the name: salutations, titles and letter openings (F04 recall check)
+NOT_NAME_PARTS = {"kære", "hej", "hi", "hello", "dear", "mr", "mrs", "ms", "miss", "dr", "hr", "fru", "frk", "prof", "sir", "madam", "vedr", "att"}
+
+
+def _is_name_part(word: str) -> bool:
+    """A part of a name that can identify the person on its own: capitalized, at least 3 letters (hyphens allowed), and not a salutation or title. Initials such as 'M.' are not parts."""
+    return len(word) >= MIN_NAME_PART_LENGTH and word[:1].isupper() and word.replace("-", "").isalpha() and word.casefold() not in NOT_NAME_PARTS
+
+
+def known_name_terms(names: list[str], allow_terms: list[str] | None = None) -> set[str]:
+    """The terms to redact everywhere in a document for the names found in it: each full name and its name parts (e.g. the first name and the surname). An allowed term, and a one-word name that is a salutation or title, is left out."""
+    allowed = {term.casefold() for term in allow_terms or []}
+    terms = {name for name in names if name.casefold() not in NOT_NAME_PARTS} | {word for name in names for word in name.split() if _is_name_part(word)}
+
+    return {term for term in terms if term.casefold() not in allowed}
+
+
 MIN_ORGANIZATION_OVERLAP = 0.6
 LANGUAGE_KEY = "language"
 

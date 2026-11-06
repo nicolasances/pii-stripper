@@ -12,6 +12,7 @@ from pii_strip.term_lists import DEFAULT_THRESHOLD
 DENY_LIST = "DENY_LIST"
 DENY_LIST_SOURCE = "deny_list"
 NER_SOURCE = "ner"
+KNOWN_NAME_SOURCE = "known_name"
 PATTERN_SOURCE = "pattern"
 
 _email_recognizer = EmailRecognizer()

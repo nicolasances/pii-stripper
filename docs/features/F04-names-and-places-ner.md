@@ -51,6 +51,10 @@ This feature carries the **project's biggest risk**: whether Danish NER finds en
 | TD-02 | Pin the model packages as project dependencies | Reproducible installs and no download at runtime (offline guarantee, F10) |
 | TD-03 | Run every language and merge, instead of detecting the document's language | Mixed-language documents are common; language detection per paragraph adds error. It costs roughly double the processing time, which is acceptable for ad hoc use |
 | TD-04 | Recall check as a developer script, not a CLI command | It's an evaluation tool for the developer, not a user feature |
+| TD-05 | Names are known document-wide (#21): every page is analyzed first, then each full `PERSON` name and its name parts are redacted on every page where they occur | The model often misses a name in a short snippet with no context, e.g. a surname alone in a footer. Knowingly over-redacts a common surname that belongs to someone else; the allow list is the remedy |
+| TD-06 | A name part is a word of the name span that is capitalized, has at least 3 letters (hyphens allowed) and is not a salutation or title (`Kære`, `Dear`, `Hr`, `Vedr` …). A one-word name that is a salutation or title is not spread either | The model includes salutations and sentence starts in name spans (see the recall check notes), which must not be blacked out on every page. Initials are too short to identify anyone |
+| TD-07 | A known name is only redacted in the same case or in capitals, like every other redaction | Many Danish surnames are ordinary words (`Skov`, `Lund`, `Holm`); case-insensitive matching would black out `skov` everywhere |
+| TD-08 | Known-name hits are `PERSON` findings with the source `known_name`, only where no other finding already covers the area | Tells propagated hits apart from the model's own in the report (F09), without counting the same area twice |
 
 ## 6. Success Criteria
 

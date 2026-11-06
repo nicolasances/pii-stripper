@@ -101,6 +101,7 @@ pii-strip case.pdf -o case-redacted.pdf --report run.json --report-include-text
 - **Strings split across lines.** A name, email or number broken over two lines may be missed.
 - **Danish addresses.** Street addresses (e.g. "Emil Holms Kanal 20, 2300 København S") are not detected. `LOCATION` catches cities and places, not addresses.
 - **Names the NER model misses.** Unusual names, names in all caps and names in tables may be missed. Common words at the start of a sentence are sometimes redacted as names. Use `--deny` and `--allow` to correct this.
+- **Names are redacted everywhere in the document.** Once a name is found on any page, the full name, the first name and the surname are redacted on every page, e.g. a surname alone in a footer. This knowingly over-redacts: a common surname such as `Hansen` is blacked out also where it belongs to someone else. Put such a word in the `--allow` file to keep it. A name part is only redacted in the same case or in capitals, so a surname that is also an ordinary word (`Skov`) is not removed in lowercase text (`skov`). Initials and inflected forms (`Jensens`) are not matched.
 - **Text in images, vector drawings or unusual font encodings** is not seen.
 
 ## Test data
