@@ -49,7 +49,6 @@ Developers at DR who need to share or reuse a PDF (sample documents, bug report 
 - Interactive review (`scan` → edit → `apply`).
 - Replacing PII with placeholders or fake values.
 - Input formats other than PDF.
-- Batch or directory processing.
 
 ---
 
@@ -263,7 +262,6 @@ open PDF ─▶ per page: extract text ─▶ analyze (da + en, merge, filter, +
 - **Local LLM detection:** possibly better recall, but slow, non-deterministic and a heavy dependency. Revisit only if NER plus a deny list falls short.
 - **Interactive review (`scan`/`apply`):** the `--report` data model is designed so this is a small v2 addition. It isn't needed for the first version.
 - **Placeholders or fake replacement values:** text can't be cleanly replaced inside a PDF without breaking the layout. Black boxes are the honest output.
-- **Batch/directory mode:** a shell loop (`for f in *.pdf; ...`) is enough for ad hoc use.
 - **Non-PDF formats:** keep the scope narrow.
 - **Guaranteeing completeness:** no detector catches all PII. The tool makes no such claim; it gives verification and a report.
 

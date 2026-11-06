@@ -89,3 +89,14 @@ def test_a_missing_model_exits_with_1_without_a_network_attempt(tmp_path, no_net
     assert no_network == []
     assert exit_code == 1
     assert "pip install" in capsys.readouterr().err
+
+
+def test_a_folder_runs_with_the_network_blocked(tmp_path, no_network):
+    make_pdf(tmp_path / "a.pdf", ["Mette Jensen skrev rapporten. Skriv til mette.jensen@example.com."])
+    make_hidden_pii_pdf(tmp_path / "b.pdf")
+
+    exit_code = main([str(tmp_path), "--quiet"])
+
+    assert no_network == []
+    assert exit_code == 0
+    assert "mette.jensen@example.com" not in extract_text(tmp_path / "processed" / "a-stripped.pdf")

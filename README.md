@@ -40,14 +40,27 @@ No Hugging Face models are used, so no Hugging Face offline mode is needed.
 
 ```bash
 pii-strip <input.pdf> -o <output.pdf> [options]
+pii-strip <folder> [options]
 ```
 
 A summary line is printed on stderr after each run.
 
+### A folder of PDFs
+
+Pass a folder instead of a file to redact every PDF directly in it (`.pdf` in any case), in name order. Each `<folder>/<name>.pdf` is written to `<folder>/processed/<name>-stripped.pdf`; the `processed` folder is created if needed.
+
+- Subfolders and files that aren't PDFs are skipped and listed in a warning. Hidden files such as `.DS_Store` are skipped silently.
+- `-o` can't be used with a folder. An existing file in `processed/` is only overwritten with `--force`.
+- A file that fails (e.g. corrupt or encrypted) doesn't stop the run; the other files are still processed.
+- Each file's summary line and messages start with its file name. A last line counts the files per result.
+- The exit code is the most serious result over all files: `2`, then `1`, then `3`, then `0`.
+- Every other option applies to each file. Names found in one file are not looked for in the others.
+- With `--report`, one JSON file is written for the whole run (`schema_version` `2`), with one entry per PDF in `files`. A file that failed has its `error`. The report may be written inside `processed/`.
+
 | Flag | What it does |
 |---|---|
-| `-o`, `--output PATH` | Where to write the redacted PDF. Required. It can't be the input file. |
-| `--force` | Overwrite the output file if it already exists. |
+| `-o`, `--output PATH` | Where to write the redacted PDF. Required for a single PDF, not allowed with a folder. It can't be the input file. |
+| `--force` | Overwrite the output file(s) if they already exist. |
 | `--lang da,en` | Languages to analyze with, comma-separated. Default: `da,en` (every page is analyzed in both). |
 | `--entities LIST` | Entity types to detect, comma-separated. Default: `PERSON,EMAIL_ADDRESS,DK_CPR,DK_PHONE,SOCIAL_PROFILE`. Supported: `PERSON`, `LOCATION`, `EMAIL_ADDRESS`, `DK_CPR`, `DK_PHONE`, `SOCIAL_PROFILE`. `SOCIAL_PROFILE` is a profile URL on LinkedIn (`linkedin.com/in/…`), Facebook, Instagram, X/Twitter, GitHub or TikTok; the whole URL is redacted. |
 | `--deny FILE` | A text file with one term per line that is always redacted. |
@@ -79,6 +92,9 @@ pii-strip case.pdf -o case-redacted.pdf --threshold 0.3
 # Keep bookmarks and accept scanned pages
 pii-strip report.pdf -o report-redacted.pdf --keep-outline --allow-image-pages
 
+# Redact every PDF in a folder into cases/processed/, replacing earlier results
+pii-strip cases/ --force
+
 # Write a JSON report (hashes only), without the summary line
 pii-strip case.pdf -o case-redacted.pdf --report run.json --quiet
 
@@ -91,7 +107,7 @@ pii-strip case.pdf -o case-redacted.pdf --report run.json --report-include-text
 | Code | Meaning | What to do |
 |---|---|---|
 | `0` | The output was written and the verification pass found no personal data left in it. | Review the output anyway before you share it. |
-| `1` | Error: wrong arguments, a missing, encrypted or corrupt input file, an output that exists without `--force`, a missing model, or a report that couldn't be written. Nothing usable was produced. | Read the error message, fix the cause and run again. |
+| `1` | Error (for a folder: in at least one file, and no file has personal data left): wrong arguments, a folder without PDFs, a missing, encrypted or corrupt input file, an output that exists without `--force`, a missing model, or a report that couldn't be written. Nothing usable was produced. | Read the error message, fix the cause and run again. |
 | `2` | The output was written, but personal data is **still in it**. The file is kept so you can inspect it. | **Do not share the output.** Check the listed entity types and pages, add the missed terms to a `--deny` file, and run again. |
 | `3` | The output was written, but some pages are only images (e.g. scanned), so they were not checked or redacted. | Check the listed pages by hand. If they are safe, run again with `--allow-image-pages`. |
 
