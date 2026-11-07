@@ -17,6 +17,13 @@ def _write_corrupt_pdf(path: Path) -> Path:
     return path
 
 
+def _output_of(folder: Path, original: str) -> Path:
+    """The redacted output for an original file name, found through its key file in keys/."""
+    key = next(key for key in (folder / "keys").glob("*.md") if f"**Original file:** {original}\n" in key.read_text())
+
+    return folder / "processed" / f"{key.stem}.pdf"
+
+
 def test_every_pdf_in_the_folder_is_redacted_into_processed(tmp_path):
     first, second = fake.email(), fake.email()
     make_pdf(tmp_path / "a.pdf", [f"Mail {first}"])
@@ -25,18 +32,18 @@ def test_every_pdf_in_the_folder_is_redacted_into_processed(tmp_path):
     exit_code = main([str(tmp_path), "--quiet"])
 
     assert exit_code == 0
-    assert sorted(path.name for path in (tmp_path / "processed").iterdir()) == ["a-stripped.pdf", "b-stripped.pdf"]
-    assert first not in extract_text(tmp_path / "processed" / "a-stripped.pdf")
-    assert second not in extract_text(tmp_path / "processed" / "b-stripped.pdf")
+    assert len(list((tmp_path / "processed").iterdir())) == 2
+    assert first not in extract_text(_output_of(tmp_path, "a.pdf"))
+    assert second not in extract_text(_output_of(tmp_path, "b.pdf"))
 
 
-def test_an_uppercase_extension_is_processed_and_written_in_lowercase(tmp_path):
+def test_an_uppercase_extension_is_processed(tmp_path):
     make_pdf(tmp_path / "Scan.PDF", ["Hello"])
 
     exit_code = main([str(tmp_path), "--quiet"])
 
     assert exit_code == 0
-    assert (tmp_path / "processed" / "Scan-stripped.pdf").exists()
+    assert _output_of(tmp_path, "Scan.PDF").exists()
 
 
 def test_subfolders_and_other_files_are_skipped_and_listed_and_hidden_files_are_skipped_silently(tmp_path, capsys):
@@ -50,44 +57,19 @@ def test_subfolders_and_other_files_are_skipped_and_listed_and_hidden_files_are_
 
     err = capsys.readouterr().err
     assert exit_code == 0
-    assert [path.name for path in (tmp_path / "processed").iterdir()] == ["a-stripped.pdf"]
+    assert [path for path in (tmp_path / "processed").iterdir()] == [_output_of(tmp_path, "a.pdf")]
     assert "notes.txt" in err and "old" in err
     assert ".DS_Store" not in err
 
 
-def test_the_processed_folder_is_not_listed_as_skipped_on_a_second_run(tmp_path, capsys):
+def test_the_output_folders_are_not_listed_as_skipped_on_a_second_run(tmp_path, capsys):
     make_pdf(tmp_path / "a.pdf", ["Hello"])
     main([str(tmp_path), "--quiet"])
     capsys.readouterr()
 
-    main([str(tmp_path), "--quiet", "--force"])
+    main([str(tmp_path), "--quiet"])
 
-    assert "processed" not in capsys.readouterr().err
-
-
-def test_an_existing_output_is_not_overwritten_without_force(tmp_path, capsys):
-    make_pdf(tmp_path / "a.pdf", ["Hello"])
-    output = tmp_path / "processed" / "a-stripped.pdf"
-    output.parent.mkdir()
-    output.write_bytes(b"keep me")
-
-    exit_code = main([str(tmp_path), "--quiet"])
-
-    assert exit_code == 1
-    assert output.read_bytes() == b"keep me"
-    assert "--force" in capsys.readouterr().err
-
-
-def test_force_overwrites_an_existing_output(tmp_path):
-    make_pdf(tmp_path / "a.pdf", ["Hello"])
-    output = tmp_path / "processed" / "a-stripped.pdf"
-    output.parent.mkdir()
-    output.write_bytes(b"old")
-
-    exit_code = main([str(tmp_path), "--quiet", "--force"])
-
-    assert exit_code == 0
-    assert output.read_bytes() != b"old"
+    assert "skipped" not in capsys.readouterr().err
 
 
 def test_a_corrupt_pdf_fails_only_that_file_and_names_it(tmp_path, capsys):
@@ -97,7 +79,7 @@ def test_a_corrupt_pdf_fails_only_that_file_and_names_it(tmp_path, capsys):
     exit_code = main([str(tmp_path), "--quiet"])
 
     assert exit_code == 1
-    assert (tmp_path / "processed" / "good-stripped.pdf").exists()
+    assert _output_of(tmp_path, "good.pdf").exists()
     assert "broken.pdf: " in capsys.readouterr().err
 
 
@@ -171,7 +153,7 @@ def test_the_summary_line_of_each_file_starts_with_its_name_and_a_final_line_cou
 
 
 def test_quiet_hides_the_final_line_when_every_file_is_clean(tmp_path, capsys):
-    make_pdf(tmp_path / "a.pdf", ["Hello"])
+    make_pdf(tmp_path / "a.pdf", ["Mette Jensen skrev rapporten om budgettet."])
 
     main([str(tmp_path), "--quiet"])
 
@@ -199,7 +181,7 @@ def test_a_folder_report_has_one_entry_per_file_and_no_matched_text(tmp_path):
     assert exit_code == 0
     assert content["schema_version"] == FOLDER_REPORT_SCHEMA_VERSION
     assert content["exit_code"] == 0
-    assert [(Path(entry["input"]).name, Path(entry["output"]).name, entry["exit_code"]) for entry in content["files"]] == [("a.pdf", "a-stripped.pdf", 0), ("b.pdf", "b-stripped.pdf", 0)]
+    assert [(entry["id"], Path(entry["output"]), entry["exit_code"]) for entry in content["files"]] == [(_output_of(tmp_path, name).stem, _output_of(tmp_path, name), 0) for name in ["a.pdf", "b.pdf"]]
     assert [finding["entity_type"] for finding in content["files"][0]["findings"]] == ["EMAIL_ADDRESS"]
     assert email not in report.read_text()
 
@@ -249,5 +231,5 @@ def test_names_found_in_one_file_are_not_redacted_in_another(tmp_path, monkeypat
 
     main([str(tmp_path), "--quiet"])
 
-    assert "Jensen" not in extract_text(tmp_path / "processed" / "a-stripped.pdf")
-    assert "Side 2 · Jensen" in extract_text(tmp_path / "processed" / "b-stripped.pdf")
+    assert "Jensen" not in extract_text(_output_of(tmp_path, "a.pdf"))
+    assert "Side 2 · Jensen" in extract_text(_output_of(tmp_path, "b.pdf"))
