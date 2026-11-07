@@ -98,10 +98,11 @@ def build_report(input_path: Path, output_path: Path, started_at: datetime, conf
     }
 
 
-def build_file_entry(input_path: Path, output_path: Path, started_at: datetime, findings: list[Finding], image_only_pages: list[int], counts: SanitizeCounts, residuals: list[Residual], exit_code: int, error: str | None, include_text: bool = False) -> dict:
-    """The report entry for one file of a folder run: the same per-file content as the single-file report. A file that failed has its error and no verification result."""
+def build_file_entry(file_id: str, output_path: Path, started_at: datetime, findings: list[Finding], image_only_pages: list[int], counts: SanitizeCounts, residuals: list[Residual], exit_code: int, error: str | None, include_text: bool = False) -> dict:
+    """The report entry for one file of a folder run: the same per-file content as the single-file report, but the file is named by its UUID only, never by its input path (#25).
+    A file that failed has its error and no verification result."""
     return {
-        "input": str(input_path),
+        "id": file_id,
         "output": str(output_path),
         "started_at": started_at.isoformat(),
         "findings": [_finding_entry(finding, include_text) for finding in findings],

@@ -47,15 +47,20 @@ A summary line is printed on stderr after each run.
 
 ### A folder of PDFs
 
-Pass a folder instead of a file to redact every PDF directly in it (`.pdf` in any case), in name order. Each `<folder>/<name>.pdf` is written to `<folder>/processed/<name>-stripped.pdf`; the `processed` folder is created if needed.
+Pass a folder instead of a file to redact every PDF directly in it (`.pdf` in any case), in name order. Each PDF gets a new random ID (a UUID). The redacted PDF is written to `<folder>/processed/<uuid>.pdf`, and a key file `<folder>/keys/<uuid>.md` records which original file (and which candidate) the ID stands for.
+
+> **`keys/` holds personal data.** It is the only link between an ID and a person. Share `processed/` on its own, never together with `keys/`.
+
+- **Every run deletes and recreates `processed/` and `keys/`**, without asking and without `--force`, so earlier results (and anything saved into those two folders) are gone. Only those two folders directly inside the input folder are deleted; if either is a symbolic link or a file, the run stops before deleting anything.
 
 - Subfolders and files that aren't PDFs are skipped and listed in a warning. Hidden files such as `.DS_Store` are skipped silently.
-- `-o` can't be used with a folder. An existing file in `processed/` is only overwritten with `--force`.
+- `-o` can't be used with a folder, and `--force` has no effect.
 - A file that fails (e.g. corrupt or encrypted) doesn't stop the run; the other files are still processed.
 - Each file's summary line and messages start with its file name. A last line counts the files per result.
 - The exit code is the most serious result over all files: `2`, then `1`, then `3`, then `0`.
 - Every other option applies to each file. Names found in one file are not looked for in the others.
-- With `--report`, one JSON file is written for the whole run (`schema_version` `2`), with one entry per PDF in `files`. A file that failed has its `error`. The report may be written inside `processed/`.
+- With `--report`, one JSON file is written for the whole run (`schema_version` `2`), with one entry per PDF in `files`. Each entry names the file by its `id` (the UUID) only, never by its original name. A file that failed has its `error`. The report may be written inside `processed/`.
+- A file that fails still gets a key file, with `Result: failed (1)`, but no PDF in `processed/`.
 
 | Flag | What it does |
 |---|---|

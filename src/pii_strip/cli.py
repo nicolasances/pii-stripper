@@ -1,19 +1,19 @@
 import argparse
 import sys
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
 from pii_strip import __version__
 from pii_strip.nlp import DEFAULT_ENTITIES, ModelMissingError, SUPPORTED_ENTITIES, parse_entities, parse_languages, require_models, NER_ENTITIES
+from pii_strip.pseudonymize import KEYS_FOLDER, PROCESSED_FOLDER, UNKNOWN_CANDIDATE, OutputFolderError, reset_output_folders, write_key
 from pii_strip.redactor import Finding, RedactedString, RedactionError, redact_pdf
 from pii_strip.report import build_file_entry, build_folder_report, build_report, summary_line, write_report
 from pii_strip.sanitize import SanitizeCounts
 from pii_strip.term_lists import DEFAULT_THRESHOLD, parse_threshold, read_term_list
 from pii_strip.verify import verify_pdf
 
-PROCESSED_FOLDER = "processed"
-OUTPUT_SUFFIX = "-stripped.pdf"
 # The most serious result first: PII left in an output must never be hidden by another result
 _SEVERITY = [2, 1, 3, 0]
 
@@ -32,9 +32,9 @@ class _Parser(argparse.ArgumentParser):
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = _Parser(prog="pii-strip", description="Remove personally identifiable information from a PDF. The text is removed from the file, and a black box is drawn in its place.", epilog=DISCLAIMER)
-    parser.add_argument("input", type=Path, help="the PDF to redact, or a folder: every PDF in it is redacted into <folder>/processed/<name>-stripped.pdf")
+    parser.add_argument("input", type=Path, help="the PDF to redact, or a folder: every PDF in it is redacted into <folder>/processed/<uuid>.pdf, with a key file per PDF in <folder>/keys/ (both folders are replaced on every run)")
     parser.add_argument("-o", "--output", type=Path, help="where to write the redacted PDF; required for a single PDF, not allowed with a folder")
-    parser.add_argument("--force", action="store_true", help="overwrite the output file(s) if they already exist")
+    parser.add_argument("--force", action="store_true", help="overwrite the output file if it already exists (no effect with a folder, whose output folders are always replaced)")
     parser.add_argument("--lang", help="languages to analyze with, comma-separated (default: da,en)")
     parser.add_argument("--entities", help=f"entity types to detect, comma-separated (default: {','.join(DEFAULT_ENTITIES)}; supported: {','.join(SUPPORTED_ENTITIES)})")
     parser.add_argument("--deny", type=Path, help="a text file with one term per line that is always redacted")
@@ -97,6 +97,7 @@ class FileRun:
     input: Path
     output: Path
     started_at: datetime
+    file_id: str | None = None
     exit_code: int = 0
     error: str | None = None
     findings: list[Finding] = field(default_factory=list)
@@ -162,8 +163,8 @@ def _most_serious(exit_codes: list[int]) -> int:
 
 
 def _folder_inputs(folder: Path) -> tuple[list[Path], list[Path]]:
-    """The PDFs directly in the folder, in name order, and the entries that are skipped: subfolders and other files. Hidden entries and the processed folder are left out of both."""
-    entries = sorted(entry for entry in folder.iterdir() if not entry.name.startswith(".") and entry.name != PROCESSED_FOLDER)
+    """The PDFs directly in the folder, in name order, and the entries that are skipped: subfolders and other files. Hidden entries and the output folders are left out of both."""
+    entries = sorted(entry for entry in folder.iterdir() if not entry.name.startswith(".") and entry.name not in (PROCESSED_FOLDER, KEYS_FOLDER))
     pdfs = [entry for entry in entries if entry.is_file() and entry.suffix.lower() == ".pdf"]
 
     return pdfs, [entry for entry in entries if entry not in pdfs]
@@ -193,37 +194,50 @@ def _write_report(args: argparse.Namespace, report: dict, exit_code: int) -> int
     return exit_code
 
 
+def _without_original_name(text: str | None, run: FileRun) -> str | None:
+    """The text with the input path and file name replaced by the file's UUID, so the report can't give the original name (and with it the person) away."""
+    if text is None:
+        return None
+
+    return text.replace(str(run.input), run.file_id).replace(run.input.name, run.file_id)
+
+
 def _main_folder(args: argparse.Namespace, options: Options) -> int:
     folder = args.input
     started_at = datetime.now(timezone.utc)
     pdfs, skipped = _folder_inputs(folder)
     processed = folder / PROCESSED_FOLDER
-    outputs = [processed / f"{pdf.stem}{OUTPUT_SUFFIX}" for pdf in pdfs]
 
     if not pdfs:
         return _error(f"no PDF files found in the folder {folder}")
 
-    if args.report and any(_same_file(args.report, path) for path in pdfs + outputs):
-        return _error("the report can't be written to an input or output file; choose a different report path")
+    if args.report and any(_same_file(args.report, path) for path in pdfs):
+        return _error("the report can't be written to an input file; choose a different report path")
 
     if skipped:
         print(f"pii-strip: warning: skipped (not a PDF, or a folder): {', '.join(entry.name for entry in skipped)}", file=sys.stderr)
 
     try:
-        processed.mkdir(exist_ok=True)
-    except OSError as error:
-        return _error(f"cannot create the output folder {processed} ({error})")
+        deleted = reset_output_folders(folder)
+    except OutputFolderError as error:
+        return _error(str(error))
+
+    if deleted:
+        print(f"pii-strip: warning: deleted the earlier results in {', '.join(f'{path}/' for path in deleted)}", file=sys.stderr)
 
     runs = []
 
-    for pdf, output in zip(pdfs, outputs):
-        label = f"{pdf.name}: "
+    for pdf in pdfs:
+        file_id = str(uuid.uuid4())
+        run = _redact_file(args, options, pdf, processed / f"{file_id}.pdf", f"{pdf.name}: ")
+        run.file_id = file_id
 
-        if output.exists() and not args.force:
-            runs.append(FileRun(pdf, output, datetime.now(timezone.utc), exit_code=_error(f"{label}{output} already exists; use --force to overwrite it"), error=f"{output} already exists"))
-            continue
+        try:
+            write_key(folder, file_id, UNKNOWN_CANDIDATE, pdf.name, run.output, run.started_at, run.exit_code)
+        except OSError as error:
+            run.exit_code = _most_serious([run.exit_code, _error(f"{pdf.name}: cannot write the key file ({error})")])
 
-        runs.append(_redact_file(args, options, pdf, output, label))
+        runs.append(run)
 
     exit_code = _most_serious([run.exit_code for run in runs])
 
@@ -234,7 +248,7 @@ def _main_folder(args: argparse.Namespace, options: Options) -> int:
         return exit_code
 
     configuration = _configuration(args, options.languages, options.entities, options.threshold)
-    files = [build_file_entry(run.input, run.output, run.started_at, run.findings, run.image_only_pages, run.counts, run.residuals, run.exit_code, run.error, args.report_include_text) for run in runs]
+    files = [build_file_entry(run.file_id, run.output, run.started_at, run.findings, run.image_only_pages, run.counts, run.residuals, run.exit_code, _without_original_name(run.error, run), args.report_include_text) for run in runs]
 
     return _write_report(args, build_folder_report(folder, processed, started_at, configuration, files, exit_code), exit_code)
 

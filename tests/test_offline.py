@@ -99,4 +99,5 @@ def test_a_folder_runs_with_the_network_blocked(tmp_path, no_network):
 
     assert no_network == []
     assert exit_code == 0
-    assert "mette.jensen@example.com" not in extract_text(tmp_path / "processed" / "a-stripped.pdf")
+    assert all("mette.jensen@example.com" not in extract_text(output) for output in (tmp_path / "processed").glob("*.pdf"))
+    assert len(list((tmp_path / "keys").glob("*.md"))) == 2
