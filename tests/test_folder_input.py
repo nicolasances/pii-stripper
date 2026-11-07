@@ -153,7 +153,7 @@ def test_the_summary_line_of_each_file_starts_with_its_name_and_a_final_line_cou
 
 
 def test_quiet_hides_the_final_line_when_every_file_is_clean(tmp_path, capsys):
-    make_pdf(tmp_path / "a.pdf", ["Hello"])
+    make_pdf(tmp_path / "a.pdf", ["Mette Jensen skrev rapporten om budgettet."])
 
     main([str(tmp_path), "--quiet"])
 

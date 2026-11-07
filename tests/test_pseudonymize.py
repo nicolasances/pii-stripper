@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 
 from pii_strip.cli import main
+from pii_strip.pseudonymize import candidate_name
+from pii_strip.redactor import Finding
 from tests.support.pdf_factory import make_pdf
 
 UUID_PDF = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.pdf$")
@@ -140,3 +142,71 @@ def test_the_folder_report_names_each_file_only_by_its_uuid(tmp_path):
     assert "Lars_Nielsen" not in report.read_text()
     assert all("input" not in entry and uuid.UUID(entry["id"]) for entry in content["files"])
     assert content["files"][1]["error"] is not None
+
+
+def _person(text: str, page: int, *areas: tuple[float, float, float, float], entity_type: str = "PERSON") -> Finding:
+    return Finding(text, entity_type, page, 0.85, "da", "ner", areas)
+
+
+AREA = (72.0, 72.0, 150.0, 84.0)
+
+
+def test_the_candidate_is_the_full_name_with_the_most_occurrences():
+    findings = [_person("Lars Nielsen", 1, AREA), _person("Mette Jensen", 2, AREA, AREA), _person("Mette Jensen", 3, AREA)]
+
+    assert candidate_name(findings) == "Mette Jensen"
+
+
+def test_first_name_and_surname_mentions_count_toward_the_full_name():
+    findings = [_person("Lars Nielsen", 1, AREA, AREA), _person("Mette Jensen", 2, AREA), _person("Jensen", 3, AREA, AREA)]
+
+    assert candidate_name(findings) == "Mette Jensen"
+
+
+def test_a_tie_goes_to_the_name_that_appears_first():
+    findings = [_person("Lars Nielsen", 2, AREA), _person("Mette Jensen", 1, (72.0, 300.0, 150.0, 312.0)), _person("Ole Hansen", 1, (72.0, 500.0, 150.0, 512.0))]
+
+    assert candidate_name(findings) == "Mette Jensen"
+
+
+def test_a_one_word_name_is_never_the_candidate():
+    findings = [_person("Jensen", 1, AREA, AREA, AREA), _person("Mette Jensen", 2, AREA)]
+
+    assert candidate_name(findings) == "Mette Jensen"
+
+
+def test_a_span_with_fewer_than_two_capitalized_words_is_not_a_full_name():
+    findings = [_person("Vi gik en tur", 1, AREA, AREA, AREA), _person("Mette Jensen", 2, AREA)]
+
+    assert candidate_name(findings) == "Mette Jensen"
+
+
+def test_a_name_split_over_lines_counts_as_the_same_name():
+    findings = [_person("Mette\nJensen", 1, AREA), _person("Mette Jensen", 2, AREA), _person("Lars Nielsen", 1, AREA)]
+
+    assert candidate_name(findings) == "Mette Jensen"
+
+
+def test_other_entity_types_are_ignored_and_no_full_name_gives_none():
+    findings = [_person("mette@example.com", 1, AREA, entity_type="EMAIL_ADDRESS"), _person("Jensen", 1, AREA)]
+
+    assert candidate_name(findings) is None
+
+
+def test_the_key_names_the_person_who_appears_most_in_the_cv(tmp_path):
+    make_pdf(tmp_path / "574_838.pdf", ["Mette Jensen skrev ansøgningen om stillingen.", "Reference: Lars Nielsen kan kontaktes.", "Mette Jensen har arbejdet i ti år."])
+
+    main([str(tmp_path), "--quiet"])
+
+    key = next((tmp_path / "keys").glob("*.md")).read_text()
+    assert "- **Candidate:** Mette Jensen *(detected automatically — check it)*\n" in key
+
+
+def test_a_cv_without_a_full_name_has_an_unknown_candidate_and_a_warning(tmp_path, capsys):
+    make_pdf(tmp_path / "574_838.pdf", ["Ansøgning om stillingen."])
+
+    main([str(tmp_path), "--quiet"])
+
+    key = next((tmp_path / "keys").glob("*.md")).read_text()
+    assert "- **Candidate:** unknown " in key
+    assert "574_838.pdf: no candidate name found" in capsys.readouterr().err

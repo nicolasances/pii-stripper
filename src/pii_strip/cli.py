@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pii_strip import __version__
 from pii_strip.nlp import DEFAULT_ENTITIES, ModelMissingError, SUPPORTED_ENTITIES, parse_entities, parse_languages, require_models, NER_ENTITIES
-from pii_strip.pseudonymize import KEYS_FOLDER, PROCESSED_FOLDER, UNKNOWN_CANDIDATE, OutputFolderError, reset_output_folders, write_key
+from pii_strip.pseudonymize import KEYS_FOLDER, PROCESSED_FOLDER, UNKNOWN_CANDIDATE, OutputFolderError, candidate_name, reset_output_folders, write_key
 from pii_strip.redactor import Finding, RedactedString, RedactionError, redact_pdf
 from pii_strip.report import build_file_entry, build_folder_report, build_report, summary_line, write_report
 from pii_strip.sanitize import SanitizeCounts
@@ -231,9 +231,13 @@ def _main_folder(args: argparse.Namespace, options: Options) -> int:
         file_id = str(uuid.uuid4())
         run = _redact_file(args, options, pdf, processed / f"{file_id}.pdf", f"{pdf.name}: ")
         run.file_id = file_id
+        candidate = candidate_name(run.findings)
+
+        if candidate is None and run.error is None:
+            print(f"pii-strip: warning: {pdf.name}: no candidate name found (no full name of at least two words); the key file says '{UNKNOWN_CANDIDATE}'", file=sys.stderr)
 
         try:
-            write_key(folder, file_id, UNKNOWN_CANDIDATE, pdf.name, run.output, run.started_at, run.exit_code)
+            write_key(folder, file_id, candidate or UNKNOWN_CANDIDATE, pdf.name, run.output, run.started_at, run.exit_code)
         except OSError as error:
             run.exit_code = _most_serious([run.exit_code, _error(f"{pdf.name}: cannot write the key file ({error})")])
 

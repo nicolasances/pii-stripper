@@ -61,6 +61,7 @@ Pass a folder instead of a file to redact every PDF directly in it (`.pdf` in an
 - Every other option applies to each file. Names found in one file are not looked for in the others.
 - With `--report`, one JSON file is written for the whole run (`schema_version` `2`), with one entry per PDF in `files`. Each entry names the file by its `id` (the UUID) only, never by its original name. A file that failed has its `error`. The report may be written inside `processed/`.
 - A file that fails still gets a key file, with `Result: failed (1)`, but no PDF in `processed/`.
+- **The candidate in the key file is detected automatically.** It is the full name (at least two capitalized words) found most often in the PDF; a first name or surname on its own counts toward its full name, and a tie goes to the name that appears first. It can be wrong, for example when a referee is mentioned more often than the candidate, so check it. If no full name is found (e.g. a CV that is only images), the key says `unknown` and a warning names the file.
 
 | Flag | What it does |
 |---|---|
